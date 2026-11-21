@@ -55,41 +55,95 @@ export async function lookupParcel(parcelId: string): Promise<ParcelLookup> {
   });
 }
 
+const RESULT_FIELDS = 'id,geom_wkt,voivodeship,county,commune,region';
+
+/** Wynik odczytu odpowiedzi ULDK (wydzielony, żeby dało się go przetestować na prawdziwych odpowiedziach). */
+export type UldkParse =
+  | { kind: 'ok'; id: string | null; wkt: string; voivodeship: string | null; county: string | null; commune: string | null; region: string | null }
+  | { kind: 'not_found' }
+  | { kind: 'no_geometry' };
+
+/**
+ * Odpowiedź ULDK: pierwsza linia to status („0” – sukces, „-1 …” – brak wyników), dalej rekordy z polami rozdzielonymi „|”.
+ * Geometrii szukamy po treści (pole z „POLYGON”), a nie po pozycji – usługa bywa niekonsekwentna (puste linie, inne kolejności).
+ */
+export function parseUldkResponse(text: string): UldkParse {
+  const lines = text
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n|\r/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const status = lines[0] ?? '';
+  if (status.startsWith('-1') || !status.startsWith('0')) return { kind: 'not_found' };
+  for (const line of lines.slice(1)) {
+    const fields = line.split('|').map((f) => f.trim());
+    const wktIndex = fields.findIndex((f) => /POLYGON\s*\(/i.test(f));
+    if (wktIndex < 0) continue;
+    const after = fields.slice(wktIndex + 1);
+    return {
+      kind: 'ok',
+      id: wktIndex > 0 ? fields[wktIndex - 1] || null : null,
+      wkt: fields[wktIndex]!,
+      voivodeship: after[0] || null,
+      county: after[1] || null,
+      commune: after[2] || null,
+      region: after[3] || null,
+    };
+  }
+  return { kind: 'no_geometry' };
+}
+
 async function fetchFromUldk(parcelId: string): Promise<ParcelLookup> {
-  const url =
-    `${ULDK_URL}?request=GetParcelById&id=${encodeURIComponent(parcelId)}` +
-    '&result=id,geom_wkt,voivodeship,county,commune,region&srid=2180';
+  const url = `${ULDK_URL}?request=GetParcelById&id=${encodeURIComponent(parcelId)}&result=${RESULT_FIELDS}&srid=2180`;
   const started = Date.now();
-  let text: string;
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(20000) });
-    if (!response.ok) return { status: 'error', message: `Usługa ULDK odpowiedziała błędem HTTP ${response.status}.` };
-    text = await response.text();
-  } catch (error) {
-    return { status: 'error', message: `Nie udało się połączyć z usługą ULDK (${errorText(error)}).` };
+  let parsed: UldkParse = { kind: 'no_geometry' };
+  let raw = '';
+  // ULDK przy chwilowym przeciążeniu potrafi odesłać „0” bez rekordu – wtedy ponawiamy (łącznie 3 próby).
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: 'text/plain, */*', 'User-Agent': 'KroplaWPolu/1.0 (+https://github.com/hautlizard77/woda-na-polu)' },
+        signal: AbortSignal.timeout(20000),
+      });
+      if (!response.ok) {
+        raw = `HTTP ${response.status}`;
+        continue;
+      }
+      raw = await response.text();
+    } catch (error) {
+      raw = errorText(error);
+      continue;
+    }
+    parsed = parseUldkResponse(raw);
+    if (parsed.kind !== 'no_geometry') break;
   }
   const durationMs = Date.now() - started;
-  const lines = text.trim().split(/\r?\n/);
-  const statusLine = lines[0]?.trim() ?? '';
-  if (!statusLine.startsWith('0') || lines.length < 2) {
+  if (parsed.kind === 'not_found') {
     return { status: 'not_found', message: 'Nie znaleziono działki o tym identyfikatorze w ewidencji (ULDK).' };
   }
-  const fields = (lines[1] ?? '').split('|');
-  const [id, wkt, voivodeship, county, commune, region] = fields;
-  if (!wkt) return { status: 'error', message: 'Usługa ULDK zwróciła odpowiedź bez geometrii.' };
-  const { ring } = parseWktOuterRing(wkt);
-  const ring2180 = ring;
+  if (parsed.kind === 'no_geometry') {
+    const snippet = raw.replace(/\s+/g, ' ').slice(0, 160);
+    console.warn(`[ULDK] ${parcelId}: brak geometrii po 3 próbach. Odpowiedź: ${snippet}`);
+    return { status: 'error', message: `Usługa ULDK nie zwróciła granicy działki (3 próby). Odpowiedź usługi: „${snippet}”.` };
+  }
+  let ring2180: Xy[];
+  try {
+    ring2180 = parseWktOuterRing(parsed.wkt).ring;
+  } catch (error) {
+    return { status: 'error', message: `Nie udało się odczytać granicy działki z ULDK (${errorText(error)}).` };
+  }
   return {
     status: 'ok',
     parcel: {
-      id: id?.trim() || parcelId,
+      id: parsed.id || parcelId,
       ring2180,
       ringWgs84: ring2180.map(epsg2180ToWgs84),
       areaHa: polygonArea(ring2180) / 10000,
-      voivodeship: voivodeship?.trim() || null,
-      county: county?.trim() || null,
-      commune: commune?.trim() || null,
-      region: region?.trim() || null,
+      voivodeship: parsed.voivodeship,
+      county: parsed.county,
+      commune: parsed.commune,
+      region: parsed.region,
       origin: 'observed',
       source: {
         name: 'Granica działki ewidencyjnej',

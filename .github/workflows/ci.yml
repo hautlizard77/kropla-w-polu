@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Instalacja zależności
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Sprawdzenie typów
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+      - name: Zapis wyniku builda
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: |
+            dist
+            package-lock.json
+          retention-days: 7

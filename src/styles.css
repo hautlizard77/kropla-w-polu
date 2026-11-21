@@ -3091,8 +3091,8 @@ details > summary:hover {
 .report-tabs__list {
   display: flex;
   gap: 0.25rem;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  /* Zakładki mieszczą się w jednym rzędzie (a poniżej 1024 px w siatce) – bez pasków przewijania. */
+  overflow: visible;
 }
 
 .report-tabs__tab {
@@ -3101,6 +3101,7 @@ details > summary:hover {
   justify-content: center;
   gap: 0.45rem;
   flex: 1 1 auto;
+  min-width: 0;
   padding: 0.85rem 1rem 0.75rem;
   margin-bottom: -2px;
   border: 0;

@@ -12,15 +12,13 @@ interface Props {
 }
 
 const CHANNELS: { key: keyof NotificationPreferences; label: string; hint: string }[] = [
-  { key: 'inApp', label: 'W aplikacji', hint: 'Lista powiadomień i licznik przy dzwonku.' },
-  { key: 'email', label: 'E-mail', hint: 'Podsumowanie wysyłane na adres z konta.' },
-  { key: 'sms', label: 'SMS', hint: 'Tylko pilne ostrzeżenia o ryzyku.' },
+  { key: 'inApp', label: 'W aplikacji', hint: 'Lista powiadomień i licznik przy dzwonku. E-mail i SMS będą dostępne po podłączeniu konta do serwera.' },
 ];
 
 const TOPICS: { key: keyof NotificationPreferences; label: string; hint: string }[] = [
-  { key: 'riskAlerts', label: 'Ryzyko niedoboru wody', hint: 'Gdy ocena działki wskazuje podwyższone ryzyko.' },
-  { key: 'dataGaps', label: 'Braki w danych', hint: 'Np. zachmurzenie na zdjęciach satelitarnych.' },
-  { key: 'seasonalTips', label: 'Porady sezonowe', hint: 'Przypomnienia o pracach retencyjnych w danym okresie.' },
+  { key: 'riskAlerts', label: 'Ryzyko i pilne kroki', hint: 'Podwyższone lub umiarkowane ryzyko w ocenie działki oraz pilne kroki z zakładki „Nawadnianie”.' },
+  { key: 'dataGaps', label: 'Braki w danych', hint: 'Ocena bez części danych (np. gleby) albo działka nieznaleziona w ewidencji.' },
+  { key: 'seasonalTips', label: 'Porada na ten miesiąc', hint: 'Co w danym okresie zrobić, żeby zatrzymać wodę na polu.' },
 ];
 
 export function AccountScreen({ user, parcelCount, preferences, onSavePreferences }: Props) {

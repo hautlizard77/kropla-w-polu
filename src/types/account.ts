@@ -42,6 +42,14 @@ export interface ParcelSummary {
     level: RiskLevel;
     headline: string;
     historicalLevel: RiskLevel;
+    /** Jedno–dwa zdania opisu stanu wody z oceny. */
+    summary?: string;
+    /** Kiedy policzono ocenę (starsze zapisy mogą tego nie mieć). */
+    analysedAt?: IsoDateTime;
+    /** Rodzaje danych, których zabrakło w ocenie, np. „Gleba”. */
+    missingData?: string[];
+    /** Najpilniejszy krok z zakładki „Nawadnianie” (tylko ocena na dziś). */
+    nextStep?: { when: string; title: string; text: string; urgent: boolean };
   } | null;
 }
 

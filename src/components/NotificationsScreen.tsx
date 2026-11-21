@@ -37,7 +37,7 @@ export function NotificationsScreen({ notifications, readIds, onMarkRead, onMark
     <div className="notifications">
       <PageHeader
         title="Powiadomienia"
-        description="Ostrzeżenia o ryzyku niedoboru wody, braki w danych, gotowe raporty i porady sezonowe."
+        description="Powstają z Twoich działek i ich ostatnich ocen: ryzyko niedoboru wody, pilne kroki, braki w danych i porada na ten miesiąc."
         actions={
           <>
             <a className="btn btn--secondary" href={HASH.account}>

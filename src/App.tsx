@@ -6,12 +6,12 @@ import { HelpScreen } from './components/HelpScreen';
 import { NotificationsScreen } from './components/NotificationsScreen';
 import { ParcelsScreen } from './components/ParcelsScreen';
 import { ReportScreen } from './components/ReportScreen';
-import { CURRENT_USER, DEFAULT_PREFERENCES, INITIAL_NOTIFICATIONS } from './data/account';
+import { CURRENT_USER, DEFAULT_PREFERENCES } from './data/account';
 import { todayInPoland } from './lib/dates';
 import { HASH, parseHash, reportHash, type Route } from './lib/route';
 import { loadJson, saveJson } from './lib/storage';
 import type { FormValues } from './lib/validation';
-import { analysisSnapshot, parcelFromLookup, summarizeParcels, visibleNotifications } from './services/account';
+import { analysisSnapshot, buildNotifications, parcelFromLookup, summarizeParcels, visibleNotifications } from './services/account';
 import { fetchParcel } from './services/terrain';
 import type { NotificationPreferences, SavedParcel } from './types/account';
 import type { AnalysisRequest, AnalysisResult } from './types/analysis';
@@ -79,7 +79,7 @@ export function App() {
   }, []);
 
   const parcels = useMemo(() => summarizeParcels(addedParcels), [addedParcels]);
-  const notifications = useMemo(() => visibleNotifications(INITIAL_NOTIFICATIONS, preferences), [preferences]);
+  const notifications = useMemo(() => visibleNotifications(buildNotifications(parcels, todayInPoland()), preferences), [parcels, preferences]);
   const unreadCount = preferences.inApp ? notifications.filter((item) => !readIds.includes(item.id)).length : 0;
 
   useEffect(() => {

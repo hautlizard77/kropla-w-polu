@@ -47,7 +47,10 @@ Każdy push na `main` jest sprawdzany w GitHub Actions (typy, testy, build), a z
 ## Aplikacja
 
 Użytkownik jest stale zalogowany na fikcyjne konto (Jan Nowak, Gospodarstwo Rolne Nowak). Logowania nie ma.
-Konto, działki i powiadomienia są zdefiniowane w [`src/data/account.ts`](src/data/account.ts).
+Konto jest zdefiniowane w [`src/data/account.ts`](src/data/account.ts). Powiadomienia nie są wpisane na sztywno – `buildNotifications`
+w [`src/services/account.ts`](src/services/account.ts) wylicza je z dodanych działek i ich ostatnich ocen: ryzyko niedoboru wody,
+pilny krok z zakładki „Nawadnianie”, ocena bez części danych, działka nieznaleziona w ULDK, działka bez oceny, ocena starsza
+niż 14 dni oraz porada retencyjna na bieżący miesiąc. Nowa ocena daje nowe powiadomienie; e-mail i SMS nie są wysyłane.
 
 | Zakładka | Adres | Co zawiera |
 |---|---|---|
@@ -55,7 +58,7 @@ Konto, działki i powiadomienia są zdefiniowane w [`src/data/account.ts`](src/d
 | Sprawdź działkę (strona główna) | `#/` (także `#/analiza`) | formularz i mapa (opis niżej) |
 | Raport | `#/raport?dzialka=…&uprawa=…&data=…` | raport sytuacji wodnej (opis niżej) |
 | Powiadomienia | `#/powiadomienia` | lista z filtrem „Wszystkie / Nieprzeczytane”, oznaczanie jako przeczytane, linki do raportów |
-| Moje konto | `#/konto` | profil, dane gospodarstwa, ustawienia powiadomień (kanały i tematy) |
+| Moje konto | `#/konto` | profil, dane gospodarstwa, ustawienia powiadomień (tematy) |
 | Pomoc | `#/pomoc` | najczęstsze pytania w 4 tematach z wyszukiwarką |
 
 Układ wzorowany na serwisach publicznych: biały nagłówek z menu („Sprawdź działkę”, „Moje działki”, „Powiadomienia”,
@@ -199,9 +202,9 @@ src/
   data/crops.ts           lista upraw i miesiące krytyczne
   data/demoScenarios.ts   trzy scenariusze demo (dane ilustracyjne, poza komponentami)
   data/geometry.ts        pomocnicze funkcje geometrii
-  data/account.ts         konto użytkownika, jego działki i powiadomienia (dane fikcyjne)
+  data/account.ts         konto użytkownika (dane fikcyjne)
   types/account.ts        typy konta, działki zapisanej, powiadomienia i preferencji
-  services/account.ts     podsumowania działek i filtrowanie powiadomień według preferencji
+  services/account.ts     podsumowania działek, powiadomienia wyliczane z ocen, filtr według preferencji
   services/analysis.ts    JEDNO asynchroniczne wejście do analizy: analyzeParcel()
   lib/                    daty (strefa Europe/Warsaw), walidacja formularza, routing (#), etykiety
   components/             powłoka aplikacji (menu, pasek górny, nawigacja dolna), zakładki, raport, mapa, ikony

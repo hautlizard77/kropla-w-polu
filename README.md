@@ -80,6 +80,9 @@ widać przy dzwonku i w menu. Dodane działki, przeczytane powiadomienia i ustaw
     Gdy nie wczytają się kafelki podkładu, pojawia się komunikat, a granice działek dalej są widoczne.
     Formularz i przykłady działają bez mapy.
 - **Raport** (`#/raport?dzialka=…&uprawa=…&data=…`): ma własny adres, więc działa odświeżanie, przycisk „Wstecz” i udostępnianie linku.
+  Raport jest podzielony na zakładki: Podsumowanie, Uprawa, Sytuacja wodna, Co robić, Teren i spływ 3D, Źródła danych
+  (strzałki ←/→ przełączają zakładki; na telefonie zakładki są siatką 2 × 3; wydruk zawiera wszystkie zakładki po kolei).
+  Teren pobiera się w tle od otwarcia raportu.
   1. **Sytuacja wodna**: ocena na wybrany dzień, wskaźniki z datami obserwacji i oddzielna ocena historycznej podatności działki.
   2. **Co możesz zrobić**: zalecenia retencyjne i agrotechniczne (działanie, uzasadnienie oparte na danych, rzeczy do sprawdzenia w terenie)
      oraz mapa z sugerowanym obszarem działania. Sekcja nawadniania podaje, czy nawadnianie jest uzasadnione, i orientacyjną dawkę (do 30 mm jednorazowo).

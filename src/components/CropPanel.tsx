@@ -37,8 +37,10 @@ export function CropPanel({
   current,
   historical,
   isDemo = false,
+  onNavigate,
 }: {
   isDemo?: boolean;
+  onNavigate: (tab: 'sytuacja' | 'zalecenia') => void;
   request: AnalysisRequest;
   current: Assessment;
   historical: Assessment & { criticalMonths: number[] };
@@ -164,21 +166,21 @@ export function CropPanel({
         <p className="crop-results__title">Wyniki liczone dla tej uprawy:</p>
         <ul>
           <li>
-            <a href="#sekcja-sytuacja" onClick={(e) => go(e, 'sekcja-sytuacja')}>
+            <button type="button" className="link-button" onClick={() => onNavigate('sytuacja')}>
               Sytuacja na dzień analizy
-            </a>{' '}
+            </button>{' '}
             <RiskBadge level={current.level} />
           </li>
           <li>
-            <a href="#sekcja-sytuacja" onClick={(e) => go(e, 'sekcja-sytuacja')}>
+            <button type="button" className="link-button" onClick={() => onNavigate('sytuacja')}>
               Podatność w ostatnich 10 sezonach
-            </a>{' '}
+            </button>{' '}
             <RiskBadge level={historical.level} />
           </li>
           <li>
-            <a href="#sekcja-dzialania" onClick={(e) => go(e, 'sekcja-dzialania')}>
+            <button type="button" className="link-button" onClick={() => onNavigate('zalecenia')}>
               Zalecenia i nawadnianie
-            </a>
+            </button>
           </li>
         </ul>
         <p className="muted small">
@@ -188,11 +190,4 @@ export function CropPanel({
       </div>
     </section>
   );
-}
-
-function go(event: { preventDefault: () => void }, id: string) {
-  event.preventDefault();
-  const heading = document.getElementById(id);
-  heading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  heading?.focus({ preventScroll: true });
 }

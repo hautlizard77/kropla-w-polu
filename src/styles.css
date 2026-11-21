@@ -3075,7 +3075,127 @@ details > summary:hover {
   }
 }
 
+/* ================================================================== */
+/* Zakładki raportu                                                    */
+/* ================================================================== */
+
+.report-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: 1.5rem 0 0;
+  background: var(--white);
+  border-bottom: 2px solid var(--border);
+}
+
+.report-tabs__list {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.report-tabs__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: none;
+  padding: 0.85rem 1rem 0.75rem;
+  margin-bottom: -2px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--gray-700);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.report-tabs__tab:hover {
+  color: var(--blue-700);
+  background: var(--gray-25);
+}
+
+.report-tabs__tab[aria-selected='true'] {
+  color: var(--green-700);
+  border-bottom-color: var(--green-600);
+  background: var(--green-50);
+}
+
+.report-tabs__tab:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
+.report-tabs__dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  flex: none;
+}
+
+.report-tabs__dot--low { background: var(--risk-low); }
+.report-tabs__dot--moderate { background: #c98a00; }
+.report-tabs__dot--elevated { background: var(--risk-elevated); }
+.report-tabs__dot--insufficient_data { background: var(--gray-400); }
+
+.report-tabpanel:focus {
+  outline: none;
+}
+
+.report-tabpanel > .report-section:first-child,
+.report-tabpanel > .terrain:first-child {
+  margin-top: 0;
+  border-top: 0;
+}
+
+.report-tabpanel > .crop-panel:first-child {
+  margin-top: 1.5rem;
+}
+
+.report-tabpanel > .report-summary {
+  margin-top: 1.5rem;
+}
+
+.report-summary dd .link-button {
+  display: inline-block;
+  margin-top: 0.35rem;
+}
+
+@media (max-width: 640px) {
+  /* Na telefonie wszystkie zakładki widoczne naraz (siatka 2 kolumny), bez przyklejania do góry ekranu. */
+  .report-tabs {
+    position: static;
+    border-bottom: 0;
+  }
+  .report-tabs__list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.4rem;
+    overflow: visible;
+  }
+  .report-tabs__tab {
+    justify-content: flex-start;
+    padding: 0.65rem 0.7rem;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.92rem;
+    white-space: normal;
+    text-align: left;
+  }
+  .report-tabs__tab[aria-selected='true'] {
+    border-color: var(--green-600);
+    box-shadow: inset 0 -3px 0 var(--green-600);
+  }
+}
+
 @media print {
+  .report-tabpanel[hidden] {
+    display: block !important;
+  }
+
   .crop-panel,
   .crop-timeline__phase,
   .crop-timeline__risk,

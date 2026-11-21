@@ -2,6 +2,8 @@ import { Component, Suspense, lazy, useEffect, useMemo, useRef, useState, type R
 import { cropLabel } from '../data/crops';
 import { STAGE_LABELS, cropDay } from '../data/cropParams';
 import { CropBadge, CropPanel } from './CropPanel';
+import { ReportTabs, TabPanel, type TabDef, type TabId } from './ReportTabs';
+import { fetchTerrain } from '../services/terrain';
 import { formatDatePl, formatDateTimePl, formatMonthsPl, formatRangePl } from '../lib/dates';
 import { AVAILABILITY_LABELS, CATEGORY_LABELS, DATA_KIND_LABELS } from '../lib/labels';
 import { sameRequest } from '../lib/route';
@@ -192,12 +194,30 @@ function Report({
   const agro = result.recommendations.filter((rec) => rec.category === 'agrotechnika');
   const cropToday = cropDay(request.cropId, request.analysisDate);
   const cropStageText = cropToday.inSeason ? STAGE_LABELS[cropToday.stage] : 'poza sezonem uprawy';
-  const goTo = (id: string) => {
-    const heading = document.getElementById(id);
-    heading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    heading?.focus({ preventScroll: true });
+  const [tab, setTab] = useState<TabId>('podsumowanie');
+  const [visited, setVisited] = useState<ReadonlySet<TabId>>(() => new Set<TabId>(['podsumowanie']));
+  const openTab = (id: TabId) => {
+    setTab(id);
+    setVisited((prev) => (prev.has(id) ? prev : new Set([...prev, id])));
+    const bar = document.getElementById('zakladki-raportu');
+    if (bar && bar.getBoundingClientRect().top < 0) bar.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
-  const openTerrain = () => goTo('teren-i-splyw');
+
+  // Teren pobieramy od razu po otwarciu raportu – zakładka „Teren i spływ 3D” pokazuje go bez czekania.
+  useEffect(() => {
+    void import('./terrain/TerrainPanel');
+    fetchTerrain(result.parcel.id).catch(() => undefined);
+  }, [result.parcel.id]);
+
+  const recCount = result.recommendations.length;
+  const tabs: TabDef[] = [
+    { id: 'podsumowanie', label: 'Podsumowanie', icon: 'home' },
+    { id: 'uprawa', label: 'Uprawa', icon: 'leaf' },
+    { id: 'sytuacja', label: 'Sytuacja wodna', icon: 'drop', level: currentState.level },
+    { id: 'zalecenia', label: recCount > 0 ? `Co robić (${recCount})` : 'Co robić', icon: 'check' },
+    { id: 'teren', label: 'Teren i spływ 3D', icon: 'parcels' },
+    { id: 'zrodla', label: 'Źródła danych', icon: 'file' },
+  ];
 
   return (
     <article className="report" aria-labelledby="tytul-raportu">
@@ -224,7 +244,9 @@ function Report({
         </p>
       </header>
 
-      <div className="report-overview">
+      <ReportTabs tabs={tabs} active={tab} onSelect={openTab} />
+
+      <TabPanel id="podsumowanie" active={tab}>
         <section className="report-summary" aria-labelledby="w-skrocie">
           <h2 id="w-skrocie">W skrócie</h2>
           <dl>
@@ -232,7 +254,7 @@ function Report({
               <dt>Uprawa</dt>
               <dd>
                 <strong>{cropLabel(request.cropId)}</strong> – {cropStageText}.{' '}
-                <button type="button" className="link-button no-print" onClick={() => goTo('twoja-uprawa')}>
+                <button type="button" className="link-button no-print" onClick={() => openTab('uprawa')}>
                   Szczegóły i zmiana uprawy
                 </button>
               </dd>
@@ -241,7 +263,10 @@ function Report({
               <dt>Czy na polu brakuje wody?</dt>
               <dd>
                 <RiskBadge level={currentState.level} />
-                <span className="report-summary__headline">{currentState.headline}</span>
+                <span className="report-summary__headline">{currentState.headline}</span>{' '}
+                <button type="button" className="link-button no-print" onClick={() => openTab('sytuacja')}>
+                  Szczegóły
+                </button>
               </dd>
             </div>
             <div>
@@ -258,215 +283,208 @@ function Report({
                     ))}
                   </ul>
                 ) : (
-                  'Na razie brak zaleceń. Sprawdź, jak spływa woda na działce – w części „Teren i spływ”.'
+                  'Na razie brak zaleceń. Sprawdź, jak spływa woda na działce – w zakładce „Teren i spływ 3D”.'
                 )}
+                <button type="button" className="link-button no-print" onClick={() => openTab('zalecenia')}>
+                  Zobacz zalecenia i nawadnianie
+                </button>
               </dd>
             </div>
           </dl>
         </section>
+      </TabPanel>
 
-        <nav className="toc no-print" aria-label="Na tej stronie">
-          <p className="toc__title">Na tej stronie</p>
-          <ol>
-            <li>
-              <button type="button" className="toc__link" onClick={() => goTo('twoja-uprawa')}>
-                Twoja uprawa
-              </button>
-            </li>
-            <li>
-              <button type="button" className="toc__link" onClick={() => goTo('sekcja-sytuacja')}>
-                Sytuacja wodna
-              </button>
-            </li>
-            <li>
-              <button type="button" className="toc__link" onClick={() => goTo('sekcja-dzialania')}>
-                Co możesz zrobić
-              </button>
-            </li>
-            <li>
-              <button type="button" className="toc__link" onClick={openTerrain}>
-                Teren i spływ (3D)
-              </button>
-            </li>
-            <li>
-              <button type="button" className="toc__link" onClick={() => goTo('sekcja-dane')}>
-                Na czym opiera się wynik
-              </button>
-            </li>
-          </ol>
-        </nav>
-      </div>
+      <TabPanel id="uprawa" active={tab}>
+        <CropPanel
+          request={request}
+          current={currentState}
+          historical={historicalVulnerability}
+          isDemo={result.isDemo}
+          onNavigate={openTab}
+        />
+      </TabPanel>
 
-      <CropPanel request={request} current={currentState} historical={historicalVulnerability} isDemo={result.isDemo} />
-
-      {/* 1. Sytuacja wodna */}
-      <section className="report-section" aria-labelledby="sekcja-sytuacja">
-        <h2 id="sekcja-sytuacja" tabIndex={-1}>
-          <span className="section-number">1</span> Sytuacja wodna
-        </h2>
-        <div className="assessment-grid">
-          <AssessmentCard
-            title={`Na dzień ${formatDatePl(currentState.asOf)}`}
-            assessment={currentState}
-            sourcesById={sourcesById}
-            primary
-            badge={<CropBadge cropId={request.cropId} />}
-          />
-          <AssessmentCard
-            title="Podatność działki na suszę (historycznie)"
-            subtitle={
-              historicalVulnerability.period
-                ? `Dane z okresu ${formatRangePl(historicalVulnerability.period)}`
-                : 'Brak zakresu danych historycznych'
-            }
-            assessment={historicalVulnerability}
-            sourcesById={sourcesById}
-            badge={<CropBadge cropId={request.cropId} />}
-            extra={
-              historicalVulnerability.criticalMonths.length > 0 && (
-                <p>
-                  <strong>Najczęstsze niedobory wody:</strong> {formatMonthsPl(historicalVulnerability.criticalMonths)}.
-                </p>
-              )
-            }
-          />
-        </div>
-      </section>
-
-      {/* 2. Co możesz zrobić */}
-      <section className="report-section" aria-labelledby="sekcja-dzialania">
-        <h2 id="sekcja-dzialania" tabIndex={-1}>
-          <span className="section-number">2</span> Co możesz zrobić
-        </h2>
-        {currentState.level === 'insufficient_data' && (
-          <p className="status status--info">
-            Ocena na wybrany dzień nie jest możliwa, dlatego zalecenia opierają się na historycznej podatności działki
-            i dostępnych danych pogodowych.
-          </p>
-        )}
-        {result.recommendations.length === 0 ? (
-          <div className="status status--info">
-            <p>
-              Brak zaleceń – bez danych pogodowych i glebowych nie da się ich rzetelnie uzasadnić. Ukształtowanie terenu, spływ
-              i obszar do sprawdzenia pod kątem retencji pokazuje sekcja „Teren i spływ”.
-            </p>
-          </div>
-        ) : (
-          <div className="recommendations-layout">
-            <div className="recommendations">
-              <RecommendationGroup title={CATEGORY_LABELS.retencja} items={retention} sourcesById={sourcesById} />
-              <RecommendationGroup title={CATEGORY_LABELS.agrotechnika} items={agro} sourcesById={sourcesById} />
-            </div>
-            <div className="recommendations-map">
-              <h3>Działka na mapie</h3>
-              <div className="no-print">
-                <ParcelMap
-                  parcels={mapParcels}
-                  selectedId={parcel.id}
-                  highlights={highlights}
-                  ariaLabel={`Mapa działki ${parcel.id} z sugerowanymi obszarami działań`}
-                />
-                {highlights.length > 0 && (
-                  <p className="legend-row">
-                    <span className="legend legend--parcel">Granica działki</span>
-                    <span className="legend legend--area">Sugerowany obszar działania</span>
+      <TabPanel id="sytuacja" active={tab}>
+        <section className="report-section" aria-labelledby="sekcja-sytuacja">
+          <h2 id="sekcja-sytuacja" tabIndex={-1}>
+            Sytuacja wodna
+          </h2>
+          <div className="assessment-grid">
+            <AssessmentCard
+              title={`Na dzień ${formatDatePl(currentState.asOf)}`}
+              assessment={currentState}
+              sourcesById={sourcesById}
+              primary
+              badge={<CropBadge cropId={request.cropId} />}
+            />
+            <AssessmentCard
+              title="Podatność działki na suszę (historycznie)"
+              subtitle={
+                historicalVulnerability.period
+                  ? `Dane z okresu ${formatRangePl(historicalVulnerability.period)}`
+                  : 'Brak zakresu danych historycznych'
+              }
+              assessment={historicalVulnerability}
+              sourcesById={sourcesById}
+              badge={<CropBadge cropId={request.cropId} />}
+              extra={
+                historicalVulnerability.criticalMonths.length > 0 && (
+                  <p>
+                    <strong>Najczęstsze niedobory wody:</strong> {formatMonthsPl(historicalVulnerability.criticalMonths)}.
                   </p>
-                )}
-              </div>
-              <SchematicMap
-                className="print-only"
-                parcel={parcel}
-                highlights={highlights}
-                title={`Szkic działki ${parcel.id} z sugerowanymi obszarami`}
-              />
-            </div>
+                )
+              }
+            />
           </div>
-        )}
+        </section>
+      </TabPanel>
 
-        <div className="irrigation">
-          <h3>
-            Nawadnianie <CropBadge cropId={request.cropId} />
-          </h3>
-          {!result.irrigation || result.irrigation.status === 'not_calculated' ? (
-            <p className="muted">
-              {result.irrigation?.note ?? 'Brak oceny nawadniania.'} Decyzję o nawadnianiu warto omówić z doradcą.
+      <TabPanel id="zalecenia" active={tab}>
+        <section className="report-section" aria-labelledby="sekcja-dzialania">
+          <h2 id="sekcja-dzialania" tabIndex={-1}>
+            Co możesz zrobić
+          </h2>
+          {currentState.level === 'insufficient_data' && (
+            <p className="status status--info">
+              Ocena na wybrany dzień nie jest możliwa, dlatego zalecenia opierają się na historycznej podatności działki
+              i dostępnych danych pogodowych.
             </p>
-          ) : (
-            <p>{result.irrigation.summary}</p>
           )}
-        </div>
-      </section>
+          {result.recommendations.length === 0 ? (
+            <div className="status status--info">
+              <p>
+                Brak zaleceń – bez danych pogodowych i glebowych nie da się ich rzetelnie uzasadnić. Ukształtowanie terenu, spływ
+                i obszar do sprawdzenia pod kątem retencji pokazuje zakładka „Teren i spływ 3D”.
+              </p>
+            </div>
+          ) : (
+            <div className="recommendations-layout">
+              <div className="recommendations">
+                <RecommendationGroup title={CATEGORY_LABELS.retencja} items={retention} sourcesById={sourcesById} />
+                <RecommendationGroup title={CATEGORY_LABELS.agrotechnika} items={agro} sourcesById={sourcesById} />
+              </div>
+              <div className="recommendations-map">
+                <h3>Działka na mapie</h3>
+                <div className="no-print">
+                  {/* Mapa Leaflet źle liczy rozmiar w ukrytym kontenerze – tworzymy ją przy pierwszym otwarciu zakładki. */}
+                  {visited.has('zalecenia') && (
+                    <ParcelMap
+                      parcels={mapParcels}
+                      selectedId={parcel.id}
+                      highlights={highlights}
+                      ariaLabel={`Mapa działki ${parcel.id} z sugerowanymi obszarami działań`}
+                    />
+                  )}
+                  {highlights.length > 0 && (
+                    <p className="legend-row">
+                      <span className="legend legend--parcel">Granica działki</span>
+                      <span className="legend legend--area">Sugerowany obszar działania</span>
+                    </p>
+                  )}
+                </div>
+                <SchematicMap
+                  className="print-only"
+                  parcel={parcel}
+                  highlights={highlights}
+                  title={`Szkic działki ${parcel.id} z sugerowanymi obszarami`}
+                />
+              </div>
+            </div>
+          )}
 
-      <LoadBoundary>
-        <Suspense
-          fallback={
-            <p className="status status--loading" role="status">
-              Wczytuję moduł „Teren i spływ”…
-            </p>
-          }
-        >
-          <TerrainPanel parcelId={parcel.id} analysisDate={request.analysisDate} />
-        </Suspense>
-      </LoadBoundary>
+          <div className="irrigation">
+            <h3>
+              Nawadnianie <CropBadge cropId={request.cropId} />
+            </h3>
+            {!result.irrigation || result.irrigation.status === 'not_calculated' ? (
+              <p className="muted">
+                {result.irrigation?.note ?? 'Brak oceny nawadniania.'} Decyzję o nawadnianiu warto omówić z doradcą.
+              </p>
+            ) : (
+              <p>{result.irrigation.summary}</p>
+            )}
+          </div>
+        </section>
+      </TabPanel>
 
-      {/* 3. Na czym opiera się wynik */}
-      <section className="report-section" aria-labelledby="sekcja-dane">
-        <h2 id="sekcja-dane" tabIndex={-1}>
-          <span className="section-number">3</span> Na czym opiera się wynik
-        </h2>
-        <div className="table-wrap">
-          <table className="sources-table">
-            <caption className="visually-hidden">Źródła danych użyte w analizie</caption>
-            <thead>
-              <tr>
-                <th scope="col">Rodzaj danych</th>
-                <th scope="col">Źródło</th>
-                <th scope="col">Stan danych</th>
-                <th scope="col">Data obserwacji</th>
-                <th scope="col">Zakres danych</th>
-                <th scope="col">Data pobrania</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.dataSources.map((source) => (
-                <tr key={source.id}>
-                  <th scope="row">{DATA_KIND_LABELS[source.kind]}</th>
-                  <td>
-                    {source.name}
-                    <br />
-                    <span className="muted">{source.provider}</span>
-                  </td>
-                  <td>
-                    <span className={`availability availability--${source.availability}`}>
-                      {AVAILABILITY_LABELS[source.availability]}
-                    </span>
-                  </td>
-                  <td>{source.observationDate ? formatDatePl(source.observationDate) : '—'}</td>
-                  <td>{source.coverage ? formatRangePl(source.coverage) : '—'}</td>
-                  <td>{source.retrievedAt ? formatDatePl(source.retrievedAt) : '—'}</td>
+      <TabPanel id="teren" active={tab}>
+        {/* Dane terenu pobierają się w tle od otwarcia raportu; widok 3D tworzymy przy pierwszym wejściu w zakładkę. */}
+        {visited.has('teren') ? (
+          <LoadBoundary>
+            <Suspense
+              fallback={
+                <p className="status status--loading" role="status">
+                  Wczytuję moduł „Teren i spływ”…
+                </p>
+              }
+            >
+              <TerrainPanel parcelId={parcel.id} analysisDate={request.analysisDate} />
+            </Suspense>
+          </LoadBoundary>
+        ) : (
+          <p className="print-only muted">Analiza terenu i spływu jest dostępna w wersji internetowej raportu.</p>
+        )}
+      </TabPanel>
+
+      <TabPanel id="zrodla" active={tab}>
+        <section className="report-section" aria-labelledby="sekcja-dane">
+          <h2 id="sekcja-dane" tabIndex={-1}>
+            Na czym opiera się wynik
+          </h2>
+          <div className="table-wrap">
+            <table className="sources-table">
+              <caption className="visually-hidden">Źródła danych użyte w analizie</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Rodzaj danych</th>
+                  <th scope="col">Źródło</th>
+                  <th scope="col">Stan danych</th>
+                  <th scope="col">Data obserwacji</th>
+                  <th scope="col">Zakres danych</th>
+                  <th scope="col">Data pobrania</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {result.dataSources.map((source) => (
+                  <tr key={source.id}>
+                    <th scope="row">{DATA_KIND_LABELS[source.kind]}</th>
+                    <td>
+                      {source.name}
+                      <br />
+                      <span className="muted">{source.provider}</span>
+                    </td>
+                    <td>
+                      <span className={`availability availability--${source.availability}`}>
+                        {AVAILABILITY_LABELS[source.availability]}
+                      </span>
+                    </td>
+                    <td>{source.observationDate ? formatDatePl(source.observationDate) : '—'}</td>
+                    <td>{source.coverage ? formatRangePl(source.coverage) : '—'}</td>
+                    <td>{source.retrievedAt ? formatDatePl(source.retrievedAt) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-        <div className="source-details">
-          {result.dataSources.map((source) => (
-            <SourceDetails key={source.id} source={source} />
-          ))}
-        </div>
+          <div className="source-details">
+            {result.dataSources.map((source) => (
+              <SourceDetails key={source.id} source={source} />
+            ))}
+          </div>
 
-        <h3>Ograniczenia analizy</h3>
-        <ul className="limitations">
-          {result.limitations.map((limitation) => (
-            <li key={limitation}>{limitation}</li>
-          ))}
-        </ul>
-        <p className="muted small">
-          Data analizy to dzień, dla którego oceniamy sytuację. Data obserwacji to dzień, którego dotyczą dane – nigdy
-          nie jest późniejsza niż data analizy. Data pobrania to moment, w którym system pobrał dane.
-        </p>
-      </section>
+          <h3>Ograniczenia analizy</h3>
+          <ul className="limitations">
+            {result.limitations.map((limitation) => (
+              <li key={limitation}>{limitation}</li>
+            ))}
+          </ul>
+          <p className="muted small">
+            Data analizy to dzień, dla którego oceniamy sytuację. Data obserwacji to dzień, którego dotyczą dane – nigdy
+            nie jest późniejsza niż data analizy. Data pobrania to moment, w którym system pobrał dane.
+          </p>
+        </section>
+      </TabPanel>
 
       <div className="report-actions report-actions--end no-print">
         <button type="button" className="btn btn--primary" onClick={() => window.print()}>

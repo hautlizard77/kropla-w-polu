@@ -1,5 +1,6 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
-import { CROPS, cropLabel, isCropId } from '../data/crops';
+import { cropLabel, isCropId } from '../data/crops';
+import { CropOptions } from './CropOptions';
 import { formatDatePl, todayInPoland } from '../lib/dates';
 import { reportHash } from '../lib/route';
 import { PARCEL_ID_FORMAT_ERROR, isValidParcelId, normalizeParcelId } from '../lib/validation';
@@ -122,11 +123,7 @@ export function ParcelsScreen({ parcels, lockedIds, onAdd, onRemove, onAnalyze }
                 aria-describedby={`${errors.cropId ? `${ids.cropId}-blad ` : ''}${ids.cropId}-pomoc`}
               >
                 <option value="">Wybierz uprawę</option>
-                {CROPS.map((crop) => (
-                  <option key={crop.id} value={crop.id}>
-                    {crop.label}
-                  </option>
-                ))}
+                <CropOptions />
               </select>
             </div>
             <div className="form-actions">

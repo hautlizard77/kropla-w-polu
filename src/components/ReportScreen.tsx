@@ -1,5 +1,7 @@
 import { Component, Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { cropLabel } from '../data/crops';
+import { STAGE_LABELS, cropDay } from '../data/cropParams';
+import { CropBadge, CropPanel } from './CropPanel';
 import { formatDatePl, formatDateTimePl, formatMonthsPl, formatRangePl } from '../lib/dates';
 import { AVAILABILITY_LABELS, CATEGORY_LABELS, DATA_KIND_LABELS } from '../lib/labels';
 import { sameRequest } from '../lib/route';
@@ -191,6 +193,8 @@ function Report({
   const retention = result.recommendations.filter((rec) => rec.category === 'retencja');
   const agro = result.recommendations.filter((rec) => rec.category === 'agrotechnika');
   const [showTerrain, setShowTerrain] = useState(false);
+  const cropToday = cropDay(request.cropId, request.analysisDate);
+  const cropStageText = cropToday.inSeason ? STAGE_LABELS[cropToday.stage] : 'poza sezonem uprawy';
   const goTo = (id: string) => {
     const heading = document.getElementById(id);
     heading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -242,6 +246,15 @@ function Report({
           <h2 id="w-skrocie">W skrócie</h2>
           <dl>
             <div>
+              <dt>Uprawa</dt>
+              <dd>
+                <strong>{cropLabel(request.cropId)}</strong> – {cropStageText}.{' '}
+                <button type="button" className="link-button no-print" onClick={() => goTo('twoja-uprawa')}>
+                  Szczegóły i zmiana uprawy
+                </button>
+              </dd>
+            </div>
+            <div>
               <dt>Czy na polu brakuje wody?</dt>
               <dd>
                 <RiskBadge level={currentState.level} />
@@ -273,6 +286,11 @@ function Report({
           <p className="toc__title">Na tej stronie</p>
           <ol>
             <li>
+              <button type="button" className="toc__link" onClick={() => goTo('twoja-uprawa')}>
+                Twoja uprawa
+              </button>
+            </li>
+            <li>
               <button type="button" className="toc__link" onClick={() => goTo('sekcja-sytuacja')}>
                 Sytuacja wodna
               </button>
@@ -296,6 +314,8 @@ function Report({
         </nav>
       </div>
 
+      <CropPanel request={request} current={currentState} historical={historicalVulnerability} isDemo={result.isDemo} />
+
       {/* 1. Sytuacja wodna */}
       <section className="report-section" aria-labelledby="sekcja-sytuacja">
         <h2 id="sekcja-sytuacja" tabIndex={-1}>
@@ -307,6 +327,7 @@ function Report({
             assessment={currentState}
             sourcesById={sourcesById}
             primary
+            badge={<CropBadge cropId={request.cropId} />}
           />
           <AssessmentCard
             title="Podatność działki na suszę (historycznie)"
@@ -317,6 +338,7 @@ function Report({
             }
             assessment={historicalVulnerability}
             sourcesById={sourcesById}
+            badge={<CropBadge cropId={request.cropId} />}
             extra={
               historicalVulnerability.criticalMonths.length > 0 && (
                 <p>
@@ -384,7 +406,9 @@ function Report({
         )}
 
         <div className="irrigation">
-          <h3>Nawadnianie</h3>
+          <h3>
+            Nawadnianie <CropBadge cropId={request.cropId} />
+          </h3>
           {!result.irrigation || result.irrigation.status === 'not_calculated' ? (
             <p className="muted">
               {result.irrigation?.note ?? 'Brak oceny nawadniania.'} Decyzję o nawadnianiu warto omówić z doradcą.
@@ -478,6 +502,7 @@ function AssessmentCard({
   sourcesById,
   primary = false,
   extra,
+  badge,
 }: {
   title: string;
   subtitle?: string;
@@ -485,10 +510,13 @@ function AssessmentCard({
   sourcesById: Map<string, DataSource>;
   primary?: boolean;
   extra?: ReactNode;
+  badge?: ReactNode;
 }) {
   return (
     <div className={`assessment assessment--${assessment.level}${primary ? ' assessment--primary' : ''}`}>
-      <h3>{title}</h3>
+      <h3>
+        {title} {badge}
+      </h3>
       {subtitle && <p className="muted small">{subtitle}</p>}
       <RiskBadge level={assessment.level} />
       <p className="assessment__headline">{assessment.headline}</p>

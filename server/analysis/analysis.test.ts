@@ -5,7 +5,7 @@ import type { SoilProfile } from '../sources/soil';
 import { saxtonRawls } from '../sources/soil';
 import { addDays, dateRange, et0PenmanMonteith, type WeatherSeries } from '../sources/weather';
 import { buildAssessment, classify, seasonStart } from './assess';
-import { cropDay } from './cropParams';
+import { cropDay } from '../../src/data/cropParams';
 import { classifyDepletion, readilyAvailableWater, runDepletion, stressCoefficient, totalAvailableWater } from './waterBalance';
 
 const uniformSoil = [{ topCm: 0, bottomCm: 150, thetaFc: 0.25, thetaWp: 0.13 }];
@@ -145,4 +145,41 @@ test('brak danych o glebie: „Za mało danych”, bez zaleceń, ale ze wskaźni
   assert.ok(result.currentState.indicators.some((i) => i.id === 'opad30'));
   assert.equal(result.dataSources.find((s) => s.kind === 'gleba')?.availability, 'missing');
   assert.equal(addDays('2024-03-01', -1), '2024-02-29');
+});
+
+test('każda uprawa z listy ma spójne parametry i kalendarz', async () => {
+  const { CROPS, CROP_GROUPS } = await import('../../src/data/crops');
+  const { CROP_PARAMS, cropPhases } = await import('../../src/data/cropParams');
+  assert.ok(CROPS.length >= 25);
+  for (const crop of CROPS) {
+    const c = CROP_PARAMS[crop.id];
+    assert.ok(c, `brak parametrów: ${crop.id}`);
+    assert.ok(CROP_GROUPS.some((g) => g.id === crop.group), `nieznana grupa: ${crop.id}`);
+    const phases = cropPhases(crop.id, 2024);
+    for (let i = 0; i < phases.length; i += 1) {
+      assert.ok(phases[i]!.from < phases[i]!.to, `${crop.id}: faza ${phases[i]!.stage} ma zerową długość`);
+      if (i > 0) assert.equal(phases[i]!.from, phases[i - 1]!.to);
+    }
+    assert.ok(c.zrStart <= c.zrMax && c.p > 0 && c.p < 1 && c.kcMid >= c.kcIni * 0.9, crop.id);
+    assert.ok(crop.criticalMonths.every((m) => m >= 3 && m <= 11), crop.id);
+  }
+});
+
+test('różne uprawy na tym samym polu dają różną ocenę', () => {
+  // Umiarkowanie suche lato na glebie średniej: płytko ukorzenione ziemniaki odczuwają niedobór, lucerna z głębokimi korzeniami – nie.
+  const weather = syntheticWeather('2014-03-01', '2024-07-10', (d) => (d.slice(5, 7) >= '05' && d.slice(5, 7) <= '08' ? [2, 4] : [3, 1]));
+  const run = (cropId: 'ziemniaki' | 'lucerna') =>
+    buildAssessment({
+      request: { parcelId: parcel.id, cropId, analysisDate: '2024-07-10' },
+      parcel,
+      weather,
+      soil: soil(0.3, 0.13, 'średnia'),
+      hydro: null,
+      now: new Date('2026-11-21T12:00:00Z'),
+    });
+  const potatoes = run('ziemniaki');
+  const lucerne = run('lucerna');
+  assert.notEqual(potatoes.currentState.summary, lucerne.currentState.summary);
+  const order = { low: 0, moderate: 1, elevated: 2, insufficient_data: -1 } as const;
+  assert.ok(order[potatoes.currentState.level] > order[lucerne.currentState.level], `${potatoes.currentState.level} vs ${lucerne.currentState.level}`);
 });

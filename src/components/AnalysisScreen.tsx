@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { CROPS, cropLabel } from '../data/crops';
+import { cropLabel } from '../data/crops';
+import { CropOptions } from './CropOptions';
 import { DEMO_PARCELS, DEMO_SCENARIOS, type DemoScenario } from '../data/demoScenarios';
 import { earliestAnalysisDate, formatDatePl, todayInPoland } from '../lib/dates';
 import { normalizeParcelId, validateForm, type FieldErrors, type FormValues } from '../lib/validation';
@@ -180,11 +181,7 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
                 aria-describedby={describedBy(ids.cropId, fieldMessage('cropId'))}
               >
                 <option value="">Wybierz uprawę</option>
-                {CROPS.map((crop) => (
-                  <option key={crop.id} value={crop.id}>
-                    {crop.label}
-                  </option>
-                ))}
+                <CropOptions />
               </select>
             </Field>
 

@@ -25,18 +25,38 @@ export interface DateRange {
 export type CropId =
   | 'pszenica_ozima'
   | 'pszenica_jara'
+  | 'jeczmien_ozimy'
   | 'jeczmien_jary'
   | 'zyto'
+  | 'pszenzyto_ozime'
+  | 'owies'
   | 'kukurydza_ziarno'
-  | 'kukurydza_kiszonka'
-  | 'rzepak_ozimy'
+  | 'gryka'
   | 'ziemniaki'
   | 'buraki_cukrowe'
-  | 'uzytki_zielone';
+  | 'rzepak_ozimy'
+  | 'rzepak_jary'
+  | 'slonecznik'
+  | 'groch'
+  | 'bobik'
+  | 'lubin'
+  | 'soja'
+  | 'kukurydza_kiszonka'
+  | 'lucerna'
+  | 'koniczyna'
+  | 'uzytki_zielone'
+  | 'marchew'
+  | 'cebula'
+  | 'kapusta'
+  | 'truskawki'
+  | 'sad_jablon';
+
+export type CropGroup = 'zboza' | 'okopowe' | 'oleiste' | 'straczkowe' | 'pastewne' | 'warzywa' | 'owoce';
 
 export interface Crop {
   id: CropId;
   label: string;
+  group: CropGroup;
   /** Miesiące (1–12), w których uprawa jest najbardziej wrażliwa na niedobór wody. */
   criticalMonths: number[];
 }

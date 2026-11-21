@@ -103,9 +103,14 @@ Granica z ULDK daje środek działki, a dla niego pobierane są równolegle trzy
 | Gleba | ISRIC SoilGrids 2.0 (WCS, 250 m): piasek, ił, węgiel organiczny w 6 warstwach do 2 m | uziarnienie, kategoria gleby, θFC i θWP wzorami Saxton & Rawls (2006), woda dostępna TAW w strefie korzeni |
 | Cieki i rowy | OpenStreetMap przez Overpass API (2 serwery zapasowe), promień 300 m | najbliższy ciek/rów i odległość od działki – podstawa zalecenia o zatrzymaniu wody w rowie |
 
+**Uprawy:** 27 upraw w 7 grupach (zboża, okopowe, oleiste, strączkowe, pastewne i użytki zielone, warzywa, owoce i sady),
+parametry w `src/data/cropParams.ts`. Raport ma sekcję „Twoja uprawa”: faza na dzień analizy, zapotrzebowanie na wodę,
+głębokość korzeni, wrażliwość na suszę, kalendarz sezonu z miesiącami niedoborów i przełącznik do porównania z inną uprawą.
+Wyniki zależne od uprawy mają oznaczenie „Zależy od uprawy”.
+
 **Model (FAO-56, dzienny bilans wody w strefie korzeni):**
 - start 1 marca z pełnym zapasem (gleba po zimie zwykle jest w polowej pojemności wodnej);
-- ETc = Kc · ET0, Kc i głębokość korzeni z typowego polskiego kalendarza uprawy (`server/analysis/cropParams.ts`);
+- ETc = Kc · ET0, Kc i głębokość korzeni z typowego polskiego kalendarza uprawy (`src/data/cropParams.ts`);
 - ubytek Dr ≤ RAW → niskie ryzyko; Dr ≤ RAW + ½(TAW − RAW) → umiarkowane; powyżej → podwyższone;
 - niepewność: obliczenie powtarzamy dla TAW ×0,75 i ×1,25; gdy wyniki dają inne klasy, raport to pokazuje;
 - historia: te same obliczenia dla 10 poprzednich sezonów; sezon z niedoborem to ≥ 15 dni stresu, miesiąc krytyczny – stres w ≥ 30% sezonów;

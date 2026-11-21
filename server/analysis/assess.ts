@@ -18,7 +18,7 @@ import type { ParcelInfo, SourceInfo } from '../../src/types/terrain';
 import type { HydroResult } from '../sources/hydro';
 import type { SoilProfile } from '../sources/soil';
 import { addDays, type WeatherSeries } from '../sources/weather';
-import { CROP_PARAMS, STAGE_LABELS, cropDay, type Stage } from './cropParams';
+import { CROP_PARAMS, STAGE_LABELS, cropDay, type Stage } from '../../src/data/cropParams';
 import { readilyAvailableWater, totalAvailableWater } from './waterBalance';
 
 export const ASSESS_VERSION = 1;

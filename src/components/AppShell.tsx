@@ -77,7 +77,9 @@ export function AppShell({
             <a className="brand" href={HASH.analysis}>
               <BrandMark />
               <span className="brand__text">
-                <span className="brand__name">Kropla w Polu</span>
+                <span className="brand__name">
+                  Kropla <span className="brand__accent">w Polu</span>
+                </span>
                 <span className="brand__tagline">Woda na Twojej działce – ocena i porady</span>
               </span>
             </a>
@@ -186,12 +188,31 @@ export function AppShell({
   );
 }
 
-function BrandMark() {
+/** Znak: kropla, w której dolnej części leży zaorane pole – woda zatrzymana na działce. */
+export function BrandMark({ className = 'brand-mark' }: { className?: string }) {
   return (
-    <svg className="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
-      <rect width="40" height="40" rx="6" fill="var(--blue-700)" />
-      <path d="M20 7c5.4 7.1 9 11.8 9 16.6a9 9 0 0 1-18 0C11 18.8 14.6 14.1 20 7z" fill="#fff" />
-      <path d="M9 33h22" stroke="var(--green-400)" strokeWidth="3" strokeLinecap="round" />
+    <svg className={className} viewBox="0 0 40 40" aria-hidden="true">
+      <defs>
+        <linearGradient id="kropla-woda" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#3d8fdc" />
+          <stop offset="1" stopColor="#0a4f91" />
+        </linearGradient>
+        <clipPath id="kropla-ksztalt">
+          <path d="M20 1C28.6 10.6 35 17.6 35 24.2a15 15 0 0 1-30 0C5 17.6 11.4 10.6 20 1z" />
+        </clipPath>
+      </defs>
+      <g clipPath="url(#kropla-ksztalt)">
+        <rect width="40" height="40" fill="url(#kropla-woda)" />
+        <path d="M4 27.5Q20 22 36 27.5V40H4z" fill="#1f7a45" />
+        <path d="M4 32Q20 27 36 32V40H4z" fill="#2b9356" />
+        <g fill="none" stroke="#bfe6cd" strokeWidth="1.6" strokeLinecap="round">
+          <path d="M20 25.6 7 40" />
+          <path d="M20 25.6 15 40" />
+          <path d="M20 25.6 25 40" />
+          <path d="M20 25.6 33 40" />
+        </g>
+      </g>
+      <path d="M11.5 19.5c.7-3.6 2.9-7.2 6-11" fill="none" stroke="#fff" strokeOpacity="0.75" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }

@@ -127,8 +127,9 @@ export function Icon({ name, size = 20, className }: { name: IconName; size?: nu
     <svg
       className={className}
       viewBox="0 0 24 24"
-      width={size}
-      height={size}
+      // Rozmiar podany dla bazowej czcionki 17 px – w rem skaluje się razem z całym interfejsem.
+      width={`${size / 17}rem`}
+      height={`${size / 17}rem`}
       fill="none"
       stroke="currentColor"
       strokeWidth={1.8}

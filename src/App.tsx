@@ -3,6 +3,7 @@ import { AccountScreen } from './components/AccountScreen';
 import { AnalysisScreen } from './components/AnalysisScreen';
 import { AppShell } from './components/AppShell';
 import { DashboardScreen } from './components/DashboardScreen';
+import { HelpScreen } from './components/HelpScreen';
 import { NotificationsScreen } from './components/NotificationsScreen';
 import { ParcelsScreen } from './components/ParcelsScreen';
 import { ReportScreen } from './components/ReportScreen';
@@ -135,6 +136,9 @@ export function App() {
           onMarkAllRead={markAllRead}
         />
       );
+      break;
+    case 'help':
+      screen = <HelpScreen />;
       break;
     case 'account':
       screen = (

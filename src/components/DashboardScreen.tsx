@@ -1,12 +1,11 @@
-import { useMemo, useState } from 'react';
 import { cropLabel } from '../data/crops';
 import { formatDatePl, formatLongDatePl, formatRelativeDateTimePl, todayInPoland } from '../lib/dates';
 import { HASH, reportHash } from '../lib/route';
 import type { AppNotification, ParcelSummary, UserAccount } from '../types/account';
+import type { RiskLevel } from '../types/analysis';
 import { PageHeader } from './AppShell';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
 import { NotificationIcon } from './NotificationsScreen';
-import { ParcelMap, type MapParcel } from './ParcelMap';
 import { RiskBadge } from './RiskBadge';
 
 interface Props {
@@ -17,167 +16,131 @@ interface Props {
   onMarkRead: (id: string) => void;
 }
 
+/** Jedno zdanie prostym językiem do listy działek. */
+const PLAIN: Record<RiskLevel, string> = {
+  elevated: 'Na polu brakuje wody – sprawdź, co możesz zrobić.',
+  moderate: 'Wody może zabraknąć – warto obserwować uprawę.',
+  low: 'Wody nie brakuje.',
+  insufficient_data: 'Za mało danych, żeby ocenić stan na ten dzień.',
+};
+
 export function DashboardScreen({ user, parcels, notifications, readIds, onMarkRead }: Props) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const today = todayInPoland();
-
-  const mapParcels = useMemo<MapParcel[]>(
-    () =>
-      parcels.flatMap((item) =>
-        item.parcel ? [{ id: item.saved.parcelId, label: `${item.saved.name} (${item.saved.parcelId})`, chipLabel: item.saved.name, geometry: item.parcel.geometry }] : [],
-      ),
-    [parcels],
-  );
-
-  const totalArea = parcels.reduce((sum, item) => sum + (item.parcel?.areaHa ?? 0), 0);
-  const areaKnown = parcels.some((item) => item.parcel?.areaHa != null);
-  const needAttention = parcels.filter(
-    (item) => item.lastAnalysis && (item.lastAnalysis.level === 'elevated' || item.lastAnalysis.level === 'insufficient_data'),
-  );
   const unread = notifications.filter((item) => !readIds.includes(item.id));
-  const latest = parcels
-    .flatMap((item) => (item.lastAnalysis ? [item] : []))
-    .sort((a, b) => ((a.lastAnalysis?.request.analysisDate ?? '') < (b.lastAnalysis?.request.analysisDate ?? '') ? 1 : -1))[0];
-  const selected = parcels.find((item) => item.saved.parcelId === selectedId) ?? null;
+  const urgent = parcels.filter((item) => item.lastAnalysis?.level === 'elevated');
+
+  const tasks: { href: string; icon: IconName; title: string; text: string; primary?: boolean }[] = [
+    {
+      href: HASH.analysis,
+      icon: 'analysis',
+      title: 'Sprawdź sytuację wodną działki',
+      text: 'Wpisz numer działki albo wskaż ją na mapie. Dostaniesz raport z oceną i poradami.',
+      primary: true,
+    },
+    {
+      href: HASH.parcels,
+      icon: 'parcels',
+      title: 'Moje działki',
+      text: `${parcels.length} ${parcels.length === 1 ? 'działka' : parcels.length < 5 ? 'działki' : 'działek'} – oceny, raporty, dodawanie nowych.`,
+    },
+    {
+      href: HASH.notifications,
+      icon: 'bell',
+      title: 'Powiadomienia',
+      text: unread.length > 0 ? `Masz ${unread.length} ${unread.length === 1 ? 'nowe powiadomienie' : 'nowe powiadomienia'}.` : 'Nie masz nowych powiadomień.',
+    },
+    {
+      href: HASH.help,
+      icon: 'help',
+      title: 'Pomoc',
+      text: 'Gdzie znaleźć numer działki, co oznaczają oceny i kolory, skąd są dane.',
+    },
+  ];
 
   return (
-    <div className="dashboard">
-      <PageHeader
-        eyebrow={formatLongDatePl(today)}
-        title={`Dzień dobry, ${user.firstName}`}
-        description={`${user.farm.name} · ${user.farm.seat}`}
-        actions={
-          <>
-            <a className="btn btn--secondary" href={HASH.parcels}>
-              <Icon name="parcels" size={18} /> Moje działki
-            </a>
-            <a className="btn btn--primary" href={HASH.analysis}>
-              <Icon name="plus" size={18} /> Nowa analiza
-            </a>
-          </>
-        }
-      />
+    <div className="start">
+      <PageHeader eyebrow={formatLongDatePl(today)} title={`Dzień dobry, ${user.firstName}`} description="Co chcesz dziś zrobić?" />
 
-      <ul className="stats" aria-label="Podsumowanie">
-        <li className="stat">
-          <span className="stat__icon">
-            <Icon name="parcels" />
-          </span>
-          <span className="stat__label">Działki</span>
-          <span className="stat__value">{parcels.length}</span>
-          <span className="stat__note">
-            {areaKnown ? `łącznie ${totalArea.toLocaleString('pl-PL', { maximumFractionDigits: 1 })} ha` : 'powierzchnia nieznana'}
-          </span>
-        </li>
-        <li className={`stat${needAttention.length > 0 ? ' stat--alert' : ''}`}>
-          <span className="stat__icon">
-            <Icon name="alert" />
-          </span>
-          <span className="stat__label">Wymagają uwagi</span>
-          <span className="stat__value">{needAttention.length}</span>
-          <span className="stat__note">podwyższone ryzyko lub niepełne dane</span>
-        </li>
-        <li className="stat">
-          <span className="stat__icon">
-            <Icon name="bell" />
-          </span>
-          <span className="stat__label">Nowe powiadomienia</span>
-          <span className="stat__value">{unread.length}</span>
-          <span className="stat__note">
-            <a href={HASH.notifications}>Zobacz wszystkie</a>
-          </span>
-        </li>
-        <li className="stat">
-          <span className="stat__icon">
-            <Icon name="calendar" />
-          </span>
-          <span className="stat__label">Ostatnia analiza</span>
-          <span className="stat__value stat__value--text">
-            {latest?.lastAnalysis ? formatDatePl(latest.lastAnalysis.request.analysisDate) : 'brak'}
-          </span>
-          <span className="stat__note">{latest ? latest.saved.name : 'Wykonaj pierwszą analizę'}</span>
-        </li>
+      {urgent.length > 0 && (
+        <div className="notice notice--warning" role="note">
+          <p className="notice__title">
+            <Icon name="alert" size={18} /> Wymaga uwagi
+          </p>
+          <div className="notice__body">
+            {urgent.map((item) => (
+              <p key={item.saved.parcelId}>
+                <strong>{item.saved.name}</strong> – podwyższone ryzyko niedoboru wody.{' '}
+                {item.lastAnalysis && <a href={reportHash(item.lastAnalysis.request)}>Zobacz raport i porady</a>}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <ul className="task-tiles">
+        {tasks.map((task) => (
+          <li key={task.href}>
+            <a className={`task-tile${task.primary ? ' task-tile--primary' : ''}`} href={task.href}>
+              <span className="task-tile__icon" aria-hidden="true">
+                <Icon name={task.icon} size={26} />
+              </span>
+              <span className="task-tile__text">
+                <span className="task-tile__title">{task.title}</span>
+                <span className="task-tile__desc">{task.text}</span>
+              </span>
+              <Icon name="chevron-right" className="task-tile__arrow" />
+            </a>
+          </li>
+        ))}
       </ul>
 
-      <div className="dashboard__grid">
-        <section className="panel" aria-labelledby="tytul-stan">
-          <div className="panel__header">
-            <h2 id="tytul-stan">Stan działek</h2>
-            <a className="link-arrow" href={HASH.parcels}>
-              Wszystkie działki <Icon name="arrow-right" size={16} />
-            </a>
-          </div>
-          <ul className="parcel-rows">
-            {parcels.map((item) => (
-              <li key={item.saved.parcelId} className={item.saved.parcelId === selectedId ? 'is-selected' : undefined}>
-                <div className="parcel-rows__main">
-                  <p className="parcel-rows__name">{item.saved.name}</p>
-                  <p className="parcel-rows__meta">
-                    <span className="mono">{item.saved.parcelId}</span> · {cropLabel(item.saved.cropId)}
-                  </p>
-                </div>
-                <div className="parcel-rows__status">
-                  {item.lastAnalysis ? (
-                    <>
-                      <RiskBadge level={item.lastAnalysis.level} />
-                      <span className="parcel-rows__date">na {formatDatePl(item.lastAnalysis.request.analysisDate)}</span>
-                    </>
-                  ) : (
-                    <span className="muted small">Brak analizy</span>
-                  )}
-                </div>
-                {item.lastAnalysis ? (
-                  <a
-                    className="icon-link"
-                    href={reportHash(item.lastAnalysis.request)}
-                    aria-label={`Raport: ${item.saved.name}`}
-                  >
-                    <Icon name="chevron-right" />
-                  </a>
-                ) : (
-                  <span className="icon-link icon-link--placeholder" aria-hidden="true" />
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="panel" aria-labelledby="tytul-mapa">
-          <div className="panel__header">
-            <h2 id="tytul-mapa">Działki na mapie</h2>
-          </div>
-          <ParcelMap
-            parcels={mapParcels}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            ariaLabel="Mapa działek gospodarstwa"
-            pickerLabel="Wybierz działkę:"
-          />
-          {selected && (
-            <div className="map-selection" role="status">
-              <div>
-                <p className="map-selection__name">{selected.saved.name}</p>
-                <p className="muted small">
-                  {selected.parcel?.locationLabel ?? 'Położenie nieznane'}
-                  {selected.parcel?.areaHa != null && ` · ${selected.parcel.areaHa.toLocaleString('pl-PL')} ha`}
+      <section className="start-section" aria-labelledby="tytul-dzialki">
+        <div className="section-head">
+          <h2 id="tytul-dzialki">Twoje działki</h2>
+          <a href={HASH.parcels}>Wszystkie działki</a>
+        </div>
+        <ul className="parcel-list">
+          {parcels.map((item) => (
+            <li key={item.saved.parcelId} className="parcel-list__item">
+              <div className="parcel-list__main">
+                <h3>{item.saved.name}</h3>
+                <p className="parcel-list__meta">
+                  {cropLabel(item.saved.cropId)} · działka <span className="mono">{item.saved.parcelId}</span>
                 </p>
               </div>
-              {selected.lastAnalysis && (
-                <a className="btn btn--small btn--secondary" href={reportHash(selected.lastAnalysis.request)}>
-                  Otwórz raport
-                </a>
-              )}
-            </div>
-          )}
-        </section>
-      </div>
+              <div className="parcel-list__status">
+                {item.lastAnalysis ? (
+                  <>
+                    <RiskBadge level={item.lastAnalysis.level} />
+                    <p>
+                      {PLAIN[item.lastAnalysis.level]}{' '}
+                      <span className="muted">(ocena na {formatDatePl(item.lastAnalysis.request.analysisDate)})</span>
+                    </p>
+                  </>
+                ) : (
+                  <p className="muted">Nie sprawdzono jeszcze tej działki.</p>
+                )}
+              </div>
+              <div className="parcel-list__action">
+                {item.lastAnalysis ? (
+                  <a className="btn btn--secondary" href={reportHash(item.lastAnalysis.request)}>
+                    Zobacz raport
+                  </a>
+                ) : (
+                  <a className="btn btn--secondary" href={HASH.analysis}>
+                    Sprawdź działkę
+                  </a>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
 
-      <section className="panel" aria-labelledby="tytul-powiadomienia">
-        <div className="panel__header">
-          <h2 id="tytul-powiadomienia">Ostatnie powiadomienia</h2>
-          <a className="link-arrow" href={HASH.notifications}>
-            Wszystkie powiadomienia <Icon name="arrow-right" size={16} />
-          </a>
+      <section className="start-section" aria-labelledby="tytul-powiadomienia">
+        <div className="section-head">
+          <h2 id="tytul-powiadomienia">Najnowsze powiadomienia</h2>
+          <a href={HASH.notifications}>Wszystkie powiadomienia</a>
         </div>
         {notifications.length === 0 ? (
           <p className="muted">Nie masz powiadomień.</p>
@@ -190,8 +153,7 @@ export function DashboardScreen({ user, parcels, notifications, readIds, onMarkR
                   <NotificationIcon kind={item.kind} />
                   <div className="feed__body">
                     <p className="feed__title">
-                      {isUnread && <span className="visually-hidden">Nowe: </span>}
-                      {item.title}
+                      {isUnread && <span className="unread-pill">Nowe</span>} {item.title}
                     </p>
                     <p className="feed__time">{formatRelativeDateTimePl(item.createdAt)}</p>
                   </div>

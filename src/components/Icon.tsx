@@ -20,7 +20,9 @@ export type IconName =
   | 'settings'
   | 'pin'
   | 'printer'
-  | 'x';
+  | 'x'
+  | 'menu'
+  | 'help';
 
 /** Proste ikony liniowe 24×24 (własne, bez zewnętrznej biblioteki). */
 const PATHS: Record<IconName, ReactNode> = {
@@ -111,6 +113,13 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   x: <path d="M6 6l12 12M18 6 6 18" />,
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  help: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7v.5M12 17v.01" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 20, className }: { name: IconName; size?: number; className?: string }) {

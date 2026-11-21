@@ -11,7 +11,8 @@ export type Route =
   | { name: 'analysis' }
   | { name: 'report'; request: AnalysisRequest | null }
   | { name: 'notifications' }
-  | { name: 'account' };
+  | { name: 'account' }
+  | { name: 'help' };
 
 export type RouteName = Route['name'];
 
@@ -21,6 +22,7 @@ export const HASH = {
   analysis: '#/analiza',
   notifications: '#/powiadomienia',
   account: '#/konto',
+  help: '#/pomoc',
 } as const;
 
 /** Zgodność wsteczna – dawny adres ekranu analizy. */
@@ -37,6 +39,8 @@ export function parseHash(hash: string): Route {
       return { name: 'notifications' };
     case '/konto':
       return { name: 'account' };
+    case '/pomoc':
+      return { name: 'help' };
     case '/raport': {
       const params = new URLSearchParams(query);
       const parcelId = params.get('dzialka') ?? '';

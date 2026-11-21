@@ -50,14 +50,19 @@ Konto, działki i powiadomienia są zdefiniowane w [`src/data/account.ts`](src/d
 
 | Zakładka | Adres | Co zawiera |
 |---|---|---|
-| Panel główny | `#/` | powitanie, kafle podsumowania (działki, wymagające uwagi, nowe powiadomienia, ostatnia analiza), stan działek, mapa działek, ostatnie powiadomienia |
+| Start | `#/` | „Co chcesz dziś zrobić?”: ostrzeżenie o działkach wymagających uwagi, kafelki czynności, lista działek z oceną prostym językiem, najnowsze powiadomienia |
 | Moje działki | `#/dzialki` | karty działek ze szkicem, położeniem, uprawą i oceną; dodawanie i usuwanie własnych działek; „Nowa analiza” z wypełnionym formularzem |
-| Nowa analiza | `#/analiza` | formularz i mapa (opis niżej) |
+| Sprawdź działkę | `#/analiza` | formularz i mapa (opis niżej) |
 | Raport | `#/raport?dzialka=…&uprawa=…&data=…` | raport sytuacji wodnej (opis niżej) |
 | Powiadomienia | `#/powiadomienia` | lista z filtrem „Wszystkie / Nieprzeczytane”, oznaczanie jako przeczytane, linki do raportów |
-| Konto | `#/konto` | profil, dane gospodarstwa, ustawienia powiadomień (kanały i tematy) |
+| Moje konto | `#/konto` | profil, dane gospodarstwa, ustawienia powiadomień (kanały i tematy) |
+| Pomoc | `#/pomoc` | najczęstsze pytania w 4 tematach z wyszukiwarką |
 
-Na komputerze nawigacja jest w menu bocznym, a na telefonie w dolnym pasku. Licznik nieprzeczytanych powiadomień
+Układ wzorowany na serwisach publicznych: biały nagłówek z menu („Start”, „Sprawdź działkę”, „Moje działki”, „Powiadomienia”,
+„Pomoc”), okruszki nawigacyjne i stopka ze skrótami. Na telefonie menu otwiera przycisk „Menu” (zamyka go też klawisz Esc).
+Strona startowa pyta „Co chcesz dziś zrobić?” i prowadzi kafelkami do najważniejszych czynności. Raport zaczyna się od ramki
+**„W skrócie”** (czy brakuje wody, co na to wskazuje, co zrobić) i spisu treści **„Na tej stronie”**. Zakładka **„Pomoc”** (`#/pomoc`)
+zawiera najczęstsze pytania z wyszukiwarką. Licznik nieprzeczytanych powiadomień
 widać przy dzwonku i w menu. Dodane działki, przeczytane powiadomienia i ustawienia są zapisywane w pamięci przeglądarki
 (`localStorage`). Gdy pamięć jest niedostępna, aplikacja działa na wartościach domyślnych.
 

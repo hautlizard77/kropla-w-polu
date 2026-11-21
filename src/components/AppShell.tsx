@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { HASH, type RouteName } from '../lib/route';
 import type { UserAccount } from '../types/account';
 import { Icon, type IconName } from './Icon';
@@ -6,20 +6,30 @@ import { Icon, type IconName } from './Icon';
 interface NavItem {
   id: RouteName;
   label: string;
-  shortLabel: string;
   href: string;
   icon: IconName;
 }
 
+/** Główne menu – krótkie, zrozumiałe nazwy czynności. */
 const NAV: NavItem[] = [
-  { id: 'dashboard', label: 'Panel główny', shortLabel: 'Panel', href: HASH.dashboard, icon: 'home' },
-  { id: 'parcels', label: 'Moje działki', shortLabel: 'Działki', href: HASH.parcels, icon: 'parcels' },
-  { id: 'analysis', label: 'Nowa analiza', shortLabel: 'Analiza', href: HASH.analysis, icon: 'analysis' },
-  { id: 'notifications', label: 'Powiadomienia', shortLabel: 'Powiadom.', href: HASH.notifications, icon: 'bell' },
-  { id: 'account', label: 'Konto', shortLabel: 'Konto', href: HASH.account, icon: 'user' },
+  { id: 'dashboard', label: 'Start', href: HASH.dashboard, icon: 'home' },
+  { id: 'analysis', label: 'Sprawdź działkę', href: HASH.analysis, icon: 'analysis' },
+  { id: 'parcels', label: 'Moje działki', href: HASH.parcels, icon: 'parcels' },
+  { id: 'notifications', label: 'Powiadomienia', href: HASH.notifications, icon: 'bell' },
+  { id: 'help', label: 'Pomoc', href: HASH.help, icon: 'help' },
 ];
 
-/** Raport należy do ścieżki analizy – w menu podświetlamy „Nowa analiza”. */
+const TITLES: Record<RouteName, string> = {
+  dashboard: 'Start',
+  analysis: 'Sprawdź działkę',
+  report: 'Raport',
+  parcels: 'Moje działki',
+  notifications: 'Powiadomienia',
+  account: 'Moje konto',
+  help: 'Pomoc',
+};
+
+/** Raport należy do ścieżki „Sprawdź działkę”. */
 function activeSection(route: RouteName): RouteName {
   return route === 'report' ? 'analysis' : route;
 }
@@ -40,112 +50,174 @@ export function AppShell({
   children: ReactNode;
 }) {
   const active = activeSection(route);
-  const current = NAV.find((item) => item.id === active);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+
+  // Po przejściu do innego widoku zamykamy menu na telefonie.
+  useEffect(() => setMenuOpen(false), [route]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false);
+        menuButton.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+
+  const crumbs: { label: string; href?: string }[] =
+    route === 'dashboard'
+      ? []
+      : route === 'report'
+        ? [
+            { label: 'Start', href: HASH.dashboard },
+            { label: 'Sprawdź działkę', href: HASH.analysis },
+            { label: 'Raport' },
+          ]
+        : [{ label: 'Start', href: HASH.dashboard }, { label: TITLES[route] }];
 
   return (
     <div className="shell">
-      <a className="skip-link" href="#tresc">
+      <a
+        className="skip-link"
+        href="#tresc"
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById('tresc')?.focus();
+        }}
+      >
         Przejdź do treści
       </a>
 
-      <aside className="sidebar no-print" aria-label="Menu aplikacji">
-        <a className="sidebar__brand" href={HASH.dashboard}>
-          <BrandMark />
-          <span>
-            <span className="sidebar__name">Kropla w Polu</span>
-            <span className="sidebar__tagline">Gospodarowanie wodą na działce</span>
-          </span>
-        </a>
-        <nav aria-label="Główna nawigacja">
-          <ul className="sidebar__nav">
-            {NAV.map((item) => (
-              <li key={item.id}>
-                <a href={item.href} aria-current={item.id === active ? 'page' : undefined}>
-                  <Icon name={item.icon} />
-                  <span>{item.label}</span>
-                  {item.id === 'notifications' && unreadCount > 0 && (
-                    <span className="count-badge" aria-label={`${unreadCount} nieprzeczytane`}>
+      <header className="masthead no-print">
+        <div className="masthead__top">
+          <div className="container masthead__inner">
+            <a className="brand" href={HASH.dashboard}>
+              <BrandMark />
+              <span className="brand__text">
+                <span className="brand__name">Kropla w Polu</span>
+                <span className="brand__tagline">Woda na Twojej działce – ocena i porady</span>
+              </span>
+            </a>
+
+            <div className="masthead__tools">
+              <a
+                className={`tool-link${route === 'notifications' ? ' is-active' : ''}`}
+                href={HASH.notifications}
+                aria-label={unreadCount > 0 ? `Powiadomienia, ${unreadCount} nowe` : 'Powiadomienia'}
+              >
+                <span className="tool-link__icon">
+                  <Icon name="bell" />
+                  {unreadCount > 0 && (
+                    <span className="badge" aria-hidden="true">
                       {unreadCount}
                     </span>
                   )}
+                </span>
+              </a>
+              <a className={`tool-link tool-link--account${route === 'account' ? ' is-active' : ''}`} href={HASH.account}>
+                <span className="avatar avatar--small" aria-hidden="true">
+                  {initials(user)}
+                </span>
+                <span className="tool-link__label">
+                  <span className="visually-hidden">Moje konto: </span>
+                  {user.firstName} {user.lastName}
+                </span>
+              </a>
+              <button
+                ref={menuButton}
+                type="button"
+                className="menu-button"
+                aria-expanded={menuOpen}
+                aria-controls="menu-glowne"
+                onClick={() => setMenuOpen((open) => !open)}
+              >
+                <Icon name={menuOpen ? 'x' : 'menu'} />
+                <span>Menu</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <nav className={`mainnav${menuOpen ? ' is-open' : ''}`} id="menu-glowne" aria-label="Menu główne">
+          <div className="container">
+            <ul>
+              {NAV.map((item) => (
+                <li key={item.id}>
+                  <a href={item.href} aria-current={item.id === active ? 'page' : undefined}>
+                    <Icon name={item.icon} size={20} />
+                    <span>{item.label}</span>
+                    {item.id === 'notifications' && unreadCount > 0 && (
+                      <span className="badge badge--inline" aria-hidden="true">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </a>
+                </li>
+              ))}
+              <li className="mainnav__account">
+                <a href={HASH.account} aria-current={route === 'account' ? 'page' : undefined}>
+                  <Icon name="user" size={20} />
+                  <span>Moje konto</span>
                 </a>
               </li>
-            ))}
-          </ul>
-        </nav>
-        <a className="sidebar__user" href={HASH.account}>
-          <span className="avatar" aria-hidden="true">
-            {initials(user)}
-          </span>
-          <span>
-            <span className="sidebar__user-name">
-              {user.firstName} {user.lastName}
-            </span>
-            <span className="sidebar__user-farm">{user.farm.name}</span>
-          </span>
-        </a>
-      </aside>
-
-      <div className="shell__main">
-        <header className="topbar no-print">
-          <a className="topbar__brand" href={HASH.dashboard} aria-label="Kropla w Polu – panel główny">
-            <BrandMark />
-          </a>
-          <p className="topbar__section">
-            {current && <Icon name={current.icon} size={18} />}
-            <span>{current?.label ?? 'Kropla w Polu'}</span>
-          </p>
-          <div className="topbar__actions">
-            <a
-              className="icon-button"
-              href={HASH.notifications}
-              aria-label={unreadCount > 0 ? `Powiadomienia, ${unreadCount} nieprzeczytane` : 'Powiadomienia'}
-            >
-              <Icon name="bell" />
-              {unreadCount > 0 && (
-                <span className="icon-button__dot" aria-hidden="true">
-                  {unreadCount}
-                </span>
-              )}
-            </a>
-            <a className="topbar__user" href={HASH.account} aria-label={`Konto: ${user.firstName} ${user.lastName}`}>
-              <span className="avatar avatar--small" aria-hidden="true">
-                {initials(user)}
-              </span>
-              <span className="topbar__user-name">{user.firstName}</span>
-            </a>
+            </ul>
           </div>
-        </header>
+        </nav>
+      </header>
 
-        <main id="tresc" className="content" tabIndex={-1}>
+      <main id="tresc" className="content" tabIndex={-1}>
+        <div className="container">
+          {crumbs.length > 0 && (
+            <nav className="breadcrumbs no-print" aria-label="Jesteś tutaj">
+              <ol>
+                {crumbs.map((crumb, index) => (
+                  <li key={crumb.label}>
+                    {crumb.href ? (
+                      <a href={crumb.href}>{crumb.label}</a>
+                    ) : (
+                      <span aria-current={index === crumbs.length - 1 ? 'page' : undefined}>{crumb.label}</span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </nav>
+          )}
           {children}
-        </main>
+        </div>
+      </main>
 
-        <footer className="app-footer no-print">
-          <span>Kropla w Polu</span>
-          <span aria-hidden="true">·</span>
-          <span>Źródła i daty danych są podane w każdym raporcie</span>
-        </footer>
-      </div>
-
-      <nav className="tabbar no-print" aria-label="Nawigacja dolna">
-        <ul>
-          {NAV.map((item) => (
-            <li key={item.id}>
-              <a href={item.href} aria-current={item.id === active ? 'page' : undefined}>
-                <span className="tabbar__icon">
-                  <Icon name={item.icon} size={22} />
-                  {item.id === 'notifications' && unreadCount > 0 && <span className="tabbar__dot" aria-hidden="true" />}
-                </span>
-                <span>{item.shortLabel}</span>
-                {item.id === 'notifications' && unreadCount > 0 && (
-                  <span className="visually-hidden">, {unreadCount} nieprzeczytane</span>
-                )}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <footer className="site-footer no-print">
+        <div className="container">
+          <div className="site-footer__grid">
+            <div>
+              <p className="site-footer__title">Kropla w Polu</p>
+              <p>Ocena sytuacji wodnej działki rolnej i porady, jak zatrzymać wodę na polu.</p>
+            </div>
+            <div>
+              <p className="site-footer__title">Na skróty</p>
+              <ul>
+                <li>
+                  <a href={HASH.analysis}>Sprawdź działkę</a>
+                </li>
+                <li>
+                  <a href={HASH.parcels}>Moje działki</a>
+                </li>
+                <li>
+                  <a href={HASH.help}>Pomoc i najczęstsze pytania</a>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p className="site-footer__title">Dane</p>
+              <p>Źródło i data każdej informacji są podane w raporcie, w części „Na czym opiera się wynik”.</p>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
@@ -153,7 +225,7 @@ export function AppShell({
 function BrandMark() {
   return (
     <svg className="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
-      <rect width="40" height="40" rx="8" fill="var(--navy-800)" />
+      <rect width="40" height="40" rx="6" fill="var(--blue-700)" />
       <path d="M20 7c5.4 7.1 9 11.8 9 16.6a9 9 0 0 1-18 0C11 18.8 14.6 14.1 20 7z" fill="#fff" />
       <path d="M9 33h22" stroke="var(--green-400)" strokeWidth="3" strokeLinecap="round" />
     </svg>

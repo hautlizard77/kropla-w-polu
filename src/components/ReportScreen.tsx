@@ -191,6 +191,11 @@ function Report({
   const retention = result.recommendations.filter((rec) => rec.category === 'retencja');
   const agro = result.recommendations.filter((rec) => rec.category === 'agrotechnika');
   const [showTerrain, setShowTerrain] = useState(false);
+  const goTo = (id: string) => {
+    const heading = document.getElementById(id);
+    heading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    heading?.focus({ preventScroll: true });
+  };
   const openTerrain = () => {
     setShowTerrain(true);
     window.setTimeout(() => document.getElementById('teren-i-splyw')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
@@ -232,9 +237,68 @@ function Report({
         </div>
       </header>
 
+      <div className="report-overview">
+        <section className="report-summary" aria-labelledby="w-skrocie">
+          <h2 id="w-skrocie">W skrócie</h2>
+          <dl>
+            <div>
+              <dt>Czy na polu brakuje wody?</dt>
+              <dd>
+                <RiskBadge level={currentState.level} />
+                <span className="report-summary__headline">{currentState.headline}</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Co na to wskazuje?</dt>
+              <dd>{currentState.summary}</dd>
+            </div>
+            <div>
+              <dt>Co możesz zrobić?</dt>
+              <dd>
+                {result.recommendations.length > 0 ? (
+                  <ul>
+                    {result.recommendations.map((rec) => (
+                      <li key={rec.id}>{rec.title}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  'Na razie brak zaleceń. Sprawdź, jak spływa woda na działce – w części „Teren i spływ”.'
+                )}
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <nav className="toc no-print" aria-label="Na tej stronie">
+          <p className="toc__title">Na tej stronie</p>
+          <ol>
+            <li>
+              <button type="button" className="toc__link" onClick={() => goTo('sekcja-sytuacja')}>
+                Sytuacja wodna
+              </button>
+            </li>
+            <li>
+              <button type="button" className="toc__link" onClick={() => goTo('sekcja-dzialania')}>
+                Co możesz zrobić
+              </button>
+            </li>
+            <li>
+              <button type="button" className="toc__link" onClick={openTerrain}>
+                Teren i spływ (3D)
+              </button>
+            </li>
+            <li>
+              <button type="button" className="toc__link" onClick={() => goTo('sekcja-dane')}>
+                Na czym opiera się wynik
+              </button>
+            </li>
+          </ol>
+        </nav>
+      </div>
+
       {/* 1. Sytuacja wodna */}
       <section className="report-section" aria-labelledby="sekcja-sytuacja">
-        <h2 id="sekcja-sytuacja">
+        <h2 id="sekcja-sytuacja" tabIndex={-1}>
           <span className="section-number">1</span> Sytuacja wodna
         </h2>
         <div className="assessment-grid">
@@ -266,7 +330,7 @@ function Report({
 
       {/* 2. Co możesz zrobić */}
       <section className="report-section" aria-labelledby="sekcja-dzialania">
-        <h2 id="sekcja-dzialania">
+        <h2 id="sekcja-dzialania" tabIndex={-1}>
           <span className="section-number">2</span> Co możesz zrobić
         </h2>
         {currentState.level === 'insufficient_data' && (
@@ -347,7 +411,7 @@ function Report({
 
       {/* 3. Na czym opiera się wynik */}
       <section className="report-section" aria-labelledby="sekcja-dane">
-        <h2 id="sekcja-dane">
+        <h2 id="sekcja-dane" tabIndex={-1}>
           <span className="section-number">3</span> Na czym opiera się wynik
         </h2>
         <div className="table-wrap">

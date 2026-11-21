@@ -20,7 +20,7 @@ const BATCH = 1000;
 const CONCURRENCY = 3;
 const TARGET_POINTS = 7_000;
 const MAX_MISSING_SHARE = 0.05;
-const REQUEST_TIMEOUT_MS = 20_000;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 /** Krok siatki: najmniejszy z 2, 3, 4, 5, 6, 8, 10, 12, 15 m, przy którym liczba punktów nie przekracza celu. */
 export function pointStep(b: Bounds): number {
@@ -64,19 +64,44 @@ export function parsePointList(text: string, points: [number, number][]): Float6
   return out;
 }
 
+/** Usługa obsługuje najwyżej 3 jednoczesne zapytania – limit jest wspólny dla wszystkich pobieranych działek. */
+let active = 0;
+const waiting: (() => void)[] = [];
+async function withSlot<T>(run: () => Promise<T>): Promise<T> {
+  if (active >= CONCURRENCY) await new Promise<void>((resolve) => waiting.push(resolve));
+  active += 1;
+  try {
+    return await run();
+  } finally {
+    active -= 1;
+    waiting.shift()?.();
+  }
+}
+
+/** Nagłówki jak w przeglądarce – usługi GUGiK odpowiadają na nie najstabilniej. */
+const HEADERS = {
+  Accept: '*/*',
+  'Accept-Language': 'pl-PL,pl;q=0.9,en;q=0.8',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36',
+};
+
 async function fetchBatch(points: [number, number][]): Promise<Float64Array> {
   const list = points.map(([e, n]) => `${n} ${e}`).join(',');
   let last: Float64Array = new Float64Array(points.length).fill(Number.NaN);
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    if (attempt > 0) await new Promise((r) => setTimeout(r, 400 * attempt));
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 800 * attempt));
     try {
-      const response = await fetch(NMT_POINTS_URL, {
-        method: 'POST',
-        body: new URLSearchParams({ request: 'GetHByPointList', list }),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      const text = await withSlot(async () => {
+        const response = await fetch(NMT_POINTS_URL, {
+          method: 'POST',
+          headers: HEADERS,
+          body: new URLSearchParams({ request: 'GetHByPointList', list }),
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        });
+        return response.ok ? response.text() : null;
       });
-      if (!response.ok) continue;
-      last = parsePointList(await response.text(), points);
+      if (text === null) continue;
+      last = parsePointList(text, points);
       // Przeciążona usługa odsyła współrzędne bez wysokości – wtedy ponawiamy.
       if (last.some((v) => !Number.isNaN(v))) return last;
     } catch {
@@ -95,12 +120,16 @@ export async function fetchNmtPoints(bounds: Bounds): Promise<DemRaster> {
   for (let i = 0; i < points.length; i += BATCH) batches.push(i);
 
   let next = 0;
+  let failed = false;
   try {
     await Promise.all(
       Array.from({ length: CONCURRENCY }, async () => {
-        while (next < batches.length) {
+        while (next < batches.length && !failed) {
           const start = batches[next++] as number;
-          values.set(await fetchBatch(points.slice(start, start + BATCH)), start);
+          const batch = await fetchBatch(points.slice(start, start + BATCH));
+          // Paczka bez żadnej wysokości po 3 próbach – usługa nie działa; nie męczymy jej resztą paczek.
+          if (batch.every((v) => Number.isNaN(v))) failed = true;
+          values.set(batch, start);
         }
       }),
     );

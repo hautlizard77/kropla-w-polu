@@ -55,6 +55,15 @@ export default function TerrainPanel({ parcelId, analysisDate }: Props) {
   const renderer = useRef<TerrainRenderer | null>(null);
   const startedAt = useRef(performance.now());
   const [loadMs, setLoadMs] = useState<number | null>(null);
+  // Licznik sekund oczekiwania – po 15 s mówimy wprost, że usługa GUGiK odpowiada wolniej.
+  const [waitedS, setWaitedS] = useState(0);
+  useEffect(() => {
+    if (terrain.kind !== 'loading') return;
+    setWaitedS(0);
+    const started = Date.now();
+    const timer = window.setInterval(() => setWaitedS(Math.round((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [terrain.kind]);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,6 +169,12 @@ export default function TerrainPanel({ parcelId, analysisDate }: Props) {
           <p>
             Pobieram model terenu z GUGiK i liczę spływ – zwykle kilka sekund. Kolejne otwarcia tej działki są natychmiastowe.
           </p>
+          {waitedS >= 15 && (
+            <p>
+              Trwa to już {waitedS} s – usługa GUGiK odpowiada wolniej niż zwykle albo chwilowo ogranicza liczbę zapytań. Jeśli nie
+              odpowie, aplikacja spróbuje wolniejszego, zapasowego źródła (najwyżej ok. 2 minuty).
+            </p>
+          )}
         </div>
       )}
 

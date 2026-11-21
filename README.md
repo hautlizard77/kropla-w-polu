@@ -320,7 +320,7 @@ Aplikacja nie korzysta z modeli AI w czasie działania – wszystkie wyniki licz
 - NMT: podstawowym źródłem jest usługa wysokości punktów GUGiK (`services.gugik.gov.pl/nmt`, GetHByPointList): siatka co 2–15 m
   (do ok. 7 tys. punktów, 3 zapytania naraz – więcej usługa nie obsługuje), zwykle 4–6 s. Wysokości mają dokładność 0,1 m, a siatka jest rzadsza niż 1 m,
   więc drobne formy terenu (bruzdy, wąskie rowy) mogą zniknąć. Gdy usługa nie odpowie, aplikacja pobiera WCS z Geoportalu
-  (1 m, ale zwykle 1–2 min, limit 120 s – `KROPLA_NMT_TIMEOUT_MS`). Teren zaczyna się pobierać w tle już przy wyborze działki (`/api/parcel`) i przy ocenie wody.
+  (1 m, ale zwykle 1–2 min, limit 120 s – `KROPLA_NMT_TIMEOUT_MS`). Teren zaczyna się pobierać w tle przy ocenie wody. Limit 3 jednoczesnych zapytań do usługi wysokości jest wspólny dla wszystkich działek; gdy usługa nie zwraca wysokości, serwer przerywa po pierwszych nieudanych paczkach i przechodzi na WCS (łącznie najwyżej 100 s).
 - NDMI ma rozdzielczość 20 m; przy małych działkach piksele graniczne mieszają sygnał z sąsiednich pól.
 - Nawadnianie: dawka orientacyjna z bilansu (do 30 mm), bez terminów i bez sprawdzania dostępu do wody.
 - ULDK ma limit zapytań na adres IP: po serii zapytań przez ok. pół minuty odrzuca kolejne albo odsyła bezużyteczną odpowiedź

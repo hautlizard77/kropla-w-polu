@@ -12,7 +12,8 @@ import { fetchNmtPoints } from './nmtPoints';
 export const NMT_WCS_URL =
   'https://mapy.geoportal.gov.pl/wss/service/PZGIK/NMT/GRID1/WCS/DigitalTerrainModelFormatTIFF';
 export const NMT_COVERAGE_ID = 'DTM_PL-KRON86-NH_TIFF';
-const TIMEOUT_MS = Number(process.env.KROPLA_NMT_TIMEOUT_MS ?? 120000);
+const TIMEOUT_MS = Number(process.env.KROPLA_NMT_TIMEOUT_MS ?? 90000);
+const TOTAL_BUDGET_MS = 100_000;
 
 export interface DemRaster {
   values: Float64Array;
@@ -74,9 +75,16 @@ export async function fetchNmt(bounds: Bounds): Promise<DemRaster> {
     maxY: Math.ceil(bounds.maxY),
   };
   const errors: string[] = [];
+  // Łączny limit czasu na wszystkie warianty – rolnik nie może czekać minutami.
+  const deadline = started + TOTAL_BUDGET_MS;
   for (const variant of await orderedVariants()) {
+    const remaining = deadline - Date.now();
+    if (remaining < 5000) {
+      errors.push(`${variant.label}: pominięty – wyczerpany limit czasu`);
+      continue;
+    }
     try {
-      const raster = await fetchOne(variant, b, AbortSignal.timeout(TIMEOUT_MS));
+      const raster = await fetchOne(variant, b, AbortSignal.timeout(Math.min(TIMEOUT_MS, remaining)));
       if (preferredVariant !== variant.id) {
         preferredVariant = variant.id;
         await cacheSet('nmt-meta', 'variant', { id: variant.id });

@@ -45,8 +45,6 @@ export function createApiHandler() {
       }
       if (path === '/parcel') {
         const lookup = await lookupParcel(id);
-        // Działka wybrana na mapie lub wpisana – teren zaczynamy pobierać od razu, zanim rolnik kliknie „Sprawdź”.
-        if (lookup.status === 'ok' && lookup.parcel.origin !== 'demo') prefetchTerrain(id);
         return send(req, res, 200, lookup);
       }
       if (path === '/terrain') return send(req, res, 200, await terrain(id));

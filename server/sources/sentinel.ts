@@ -41,6 +41,24 @@ export function minusDays(date: string, days: number): string {
   return new Date(t).toISOString().slice(0, 10);
 }
 
+/**
+ * Pierścień GeoJSON: bez powtórzonych kolejnych punktów i zamknięty dokładnie raz. Earth Search odrzuca (HTTP 400)
+ * wielokąt z dwoma identycznymi punktami na końcu („edges adjacent … coincide”) – a ring z ULDK bywa już zamknięty.
+ */
+export function closedRing(ring: [number, number][]): [number, number][] {
+  const out: [number, number][] = [];
+  for (const p of ring) {
+    const last = out[out.length - 1];
+    if (!last || last[0] !== p[0] || last[1] !== p[1]) out.push(p);
+  }
+  if (out.length > 1) {
+    const first = out[0]!;
+    const last = out[out.length - 1]!;
+    if (first[0] === last[0] && first[1] === last[1]) out.pop();
+  }
+  return out.length > 0 ? [...out, out[0]!] : out;
+}
+
 export async function computeNdmi(parcel: ParcelInfo, analysisDate: string, displayGrid: GridSpec): Promise<Omit<NdmiResult, 'cached'>> {
   const timings: { label: string; ms: number }[] = [];
   const started = Date.now();
@@ -48,7 +66,7 @@ export async function computeNdmi(parcel: ParcelInfo, analysisDate: string, disp
   // Przelot Sentinel-2 nad Polską ok. 9–10 UTC; koniec dnia analizy w Polsce to najpóźniej 22:59 UTC.
   const body = {
     collections: ['sentinel-2-l2a'],
-    intersects: { type: 'Polygon', coordinates: [[...parcel.ringWgs84, parcel.ringWgs84[0]]] },
+    intersects: { type: 'Polygon', coordinates: [closedRing(parcel.ringWgs84)] },
     datetime: `${from}T00:00:00Z/${analysisDate}T21:59:59Z`,
     limit: 40,
     sortby: [{ field: 'properties.datetime', direction: 'desc' }],

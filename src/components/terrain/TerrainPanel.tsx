@@ -404,13 +404,8 @@ function NdmiInfo({ state }: { state: Load<NdmiResult> }) {
       </p>
     );
   }
-  if (state.kind === 'error') {
-    return (
-      <p className="status status--error" role="alert">
-        {state.message} Analiza terenu pozostaje dostępna.
-      </p>
-    );
-  }
+  // Błąd pobierania Sentinel-2 nie przeszkadza w analizie terenu – nie pokazujemy komunikatu.
+  if (state.kind === 'error') return null;
   const result = state.value;
   return (
     <div className="ndmi-info" role="status">

@@ -63,3 +63,11 @@ test('NDMI: statystyki działki, odchylenia i przeniesienie na siatkę EPSG:2180
   assert.equal(result.resolutionM, 20);
   assert.match(result.message, /miejsca do sprawdzenia w terenie/);
 });
+
+test('pierścień dla STAC jest zamknięty dokładnie raz', async () => {
+  const { closedRing } = await import('./sentinel');
+  const open: [number, number][] = [[1, 1], [2, 1], [2, 2]];
+  assert.deepEqual(closedRing(open), [[1, 1], [2, 1], [2, 2], [1, 1]]);
+  assert.deepEqual(closedRing([...open, [1, 1]]), [[1, 1], [2, 1], [2, 2], [1, 1]]);
+  assert.deepEqual(closedRing([[1, 1], [2, 1], [2, 1], [2, 2], [1, 1], [1, 1]]), [[1, 1], [2, 1], [2, 2], [1, 1]]);
+});

@@ -190,6 +190,8 @@ function Report({
   headingRef: RefObject<HTMLHeadingElement | null>;
 }) {
   const sourcesById = useMemo(() => new Map(result.dataSources.map((source) => [source.id, source])), [result]);
+  // Cieków bez danych nie pokazujemy w tabeli źródeł (brak odpowiedzi usług to nie informacja dla rolnika).
+  const shownSources = useMemo(() => result.dataSources.filter((source) => !(source.id === 'hydro' && source.availability === 'missing')), [result]);
   const highlights = useMemo(
     () => result.recommendations.flatMap((rec) => (rec.suggestedArea ? [rec.suggestedArea] : [])),
     [result],
@@ -393,7 +395,7 @@ function Report({
                 </tr>
               </thead>
               <tbody>
-                {result.dataSources.map((source) => (
+                {shownSources.map((source) => (
                   <tr key={source.id}>
                     <th scope="row">{DATA_KIND_LABELS[source.kind]}</th>
                     <td>
@@ -416,7 +418,7 @@ function Report({
           </div>
 
           <div className="source-details">
-            {result.dataSources.map((source) => (
+            {shownSources.map((source) => (
               <SourceDetails key={source.id} source={source} />
             ))}
           </div>

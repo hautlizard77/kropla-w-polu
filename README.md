@@ -323,6 +323,10 @@ Aplikacja nie korzysta z modeli AI w czasie działania – wszystkie wyniki licz
   (1 m, ale zwykle 1–2 min, limit 120 s – `KROPLA_NMT_TIMEOUT_MS`). Teren zaczyna się pobierać w tle już przy wyborze działki (`/api/parcel`) i przy ocenie wody.
 - NDMI ma rozdzielczość 20 m; przy małych działkach piksele graniczne mieszają sygnał z sąsiednich pól.
 - Nawadnianie: dawka orientacyjna z bilansu (do 30 mm), bez terminów i bez sprawdzania dostępu do wody.
+- ULDK ma limit zapytań na adres IP: po serii zapytań przez ok. pół minuty odrzuca kolejne albo odsyła bezużyteczną odpowiedź
+  (np. punkt w WKB zamiast granicy). Serwer wysyła zapytania do ULDK po kolei (odstęp 400 ms), ponawia po 1,5 s i 4 s,
+  odczytuje też geometrię w WKB, a nieudane wyszukanie pamięta przez 30 s, żeby ocena, teren i satelita nie odpytywały ULDK osobno.
+  Udane wyszukania są buforowane na stałe (`.cache/uldk`).
 - Mapa Leaflet wymaga internetu (kafelki OSM). Bez nich działa stan awaryjny.
 
 ## Weryfikacja wyników

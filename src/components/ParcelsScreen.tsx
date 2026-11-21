@@ -58,7 +58,7 @@ export function ParcelsScreen({ parcels, lockedIds, onAdd, onRemove, onAnalyze }
     <div className="parcels">
       <PageHeader
         title="Moje działki"
-        description={`${parcels.length} ${parcels.length === 1 ? 'działka' : parcels.length < 5 ? 'działki' : 'działek'}${
+        description={`${parcels.length} ${parcelWord(parcels.length)}${
           totalArea > 0 ? ` · ${totalArea.toLocaleString('pl-PL', { maximumFractionDigits: 1 })} ha o znanej powierzchni` : ''
         }`}
         actions={
@@ -219,4 +219,12 @@ export function ParcelsScreen({ parcels, lockedIds, onAdd, onRemove, onAnalyze }
       )}
     </div>
   );
+}
+
+/** Odmiana: 1 działka, 2–4 działki (ale 12–14 działek), 0 i 5+ działek. */
+function parcelWord(n: number): string {
+  if (n === 1) return 'działka';
+  const last = n % 10;
+  const lastTwo = n % 100;
+  return last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14) ? 'działki' : 'działek';
 }

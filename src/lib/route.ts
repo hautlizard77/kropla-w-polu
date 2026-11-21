@@ -6,7 +6,6 @@ import type { AnalysisRequest } from '../types/analysis';
  * Każdy widok ma własny adres, więc działa „Wstecz”, odświeżenie strony i udostępnienie linku.
  */
 export type Route =
-  | { name: 'dashboard' }
   | { name: 'parcels' }
   | { name: 'analysis' }
   | { name: 'report'; request: AnalysisRequest | null }
@@ -17,7 +16,6 @@ export type Route =
 export type RouteName = Route['name'];
 
 export const HASH = {
-  dashboard: '#/',
   parcels: '#/dzialki',
   analysis: '#/analiza',
   notifications: '#/powiadomienia',
@@ -33,8 +31,6 @@ export function parseHash(hash: string): Route {
   switch (path) {
     case '/dzialki':
       return { name: 'parcels' };
-    case '/analiza':
-      return { name: 'analysis' };
     case '/powiadomienia':
       return { name: 'notifications' };
     case '/konto':
@@ -51,8 +47,9 @@ export function parseHash(hash: string): Route {
       }
       return { name: 'report', request: null };
     }
+    // Strona główna („#/”) i dawny adres „#/analiza” – ekran „Sprawdź działkę”.
     default:
-      return { name: 'dashboard' };
+      return { name: 'analysis' };
   }
 }
 

@@ -2,7 +2,7 @@
  * Konto użytkownika na potrzeby pokazu. Zakładamy, że użytkownik jest stale zalogowany.
  * Osoba, gospodarstwo i dane kontaktowe są fikcyjne.
  */
-import type { AppNotification, NotificationPreferences, SavedParcel, UserAccount } from '../types/account';
+import type { AppNotification, NotificationPreferences, UserAccount } from '../types/account';
 import { reportHash } from '../lib/route';
 
 export const CURRENT_USER: UserAccount = {
@@ -19,11 +19,6 @@ export const CURRENT_USER: UserAccount = {
   },
 };
 
-export const INITIAL_PARCELS: SavedParcel[] = [
-  { parcelId: '040705_5.0012.245/3', name: 'Pole przy rowie', cropId: 'pszenica_ozima', addedOn: '2025-03-14' },
-  { parcelId: '062010_2.0004.301', name: 'Stok za lasem', cropId: 'rzepak_ozimy', addedOn: '2025-04-02' },
-  { parcelId: '302005_2.0015.88/2', name: 'Pole kukurydziane', cropId: 'kukurydza_ziarno', addedOn: '2025-05-20' },
-];
 
 export const DEFAULT_PREFERENCES: NotificationPreferences = {
   inApp: true,

@@ -12,7 +12,6 @@ interface NavItem {
 
 /** Główne menu – krótkie, zrozumiałe nazwy czynności. */
 const NAV: NavItem[] = [
-  { id: 'dashboard', label: 'Start', href: HASH.dashboard, icon: 'home' },
   { id: 'analysis', label: 'Sprawdź działkę', href: HASH.analysis, icon: 'analysis' },
   { id: 'parcels', label: 'Moje działki', href: HASH.parcels, icon: 'parcels' },
   { id: 'notifications', label: 'Powiadomienia', href: HASH.notifications, icon: 'bell' },
@@ -20,7 +19,6 @@ const NAV: NavItem[] = [
 ];
 
 const TITLES: Record<RouteName, string> = {
-  dashboard: 'Start',
   analysis: 'Sprawdź działkę',
   report: 'Raport',
   parcels: 'Moje działki',
@@ -69,15 +67,11 @@ export function AppShell({
   }, [menuOpen]);
 
   const crumbs: { label: string; href?: string }[] =
-    route === 'dashboard'
+    route === 'analysis'
       ? []
       : route === 'report'
-        ? [
-            { label: 'Start', href: HASH.dashboard },
-            { label: 'Sprawdź działkę', href: HASH.analysis },
-            { label: 'Raport' },
-          ]
-        : [{ label: 'Start', href: HASH.dashboard }, { label: TITLES[route] }];
+        ? [{ label: 'Sprawdź działkę', href: HASH.analysis }, { label: 'Raport' }]
+        : [{ label: 'Sprawdź działkę', href: HASH.analysis }, { label: TITLES[route] }];
 
   return (
     <div className="shell">
@@ -95,7 +89,7 @@ export function AppShell({
       <header className="masthead no-print">
         <div className="masthead__top">
           <div className="container masthead__inner">
-            <a className="brand" href={HASH.dashboard}>
+            <a className="brand" href={HASH.analysis}>
               <BrandMark />
               <span className="brand__text">
                 <span className="brand__name">Kropla w Polu</span>

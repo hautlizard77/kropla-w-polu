@@ -2,12 +2,11 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { AccountScreen } from './components/AccountScreen';
 import { AnalysisScreen } from './components/AnalysisScreen';
 import { AppShell } from './components/AppShell';
-import { DashboardScreen } from './components/DashboardScreen';
 import { HelpScreen } from './components/HelpScreen';
 import { NotificationsScreen } from './components/NotificationsScreen';
 import { ParcelsScreen } from './components/ParcelsScreen';
 import { ReportScreen } from './components/ReportScreen';
-import { CURRENT_USER, DEFAULT_PREFERENCES, INITIAL_NOTIFICATIONS, INITIAL_PARCELS } from './data/account';
+import { CURRENT_USER, DEFAULT_PREFERENCES, INITIAL_NOTIFICATIONS } from './data/account';
 import { todayInPoland } from './lib/dates';
 import { HASH, parseHash, reportHash, type Route } from './lib/route';
 import { loadJson, saveJson } from './lib/storage';
@@ -17,7 +16,6 @@ import type { NotificationPreferences, SavedParcel } from './types/account';
 import type { AnalysisRequest, AnalysisResult } from './types/analysis';
 
 const EMPTY_FORM: FormValues = { parcelId: '', cropId: '', analysisDate: todayInPoland() };
-const LOCKED_IDS = INITIAL_PARCELS.map((parcel) => parcel.parcelId);
 
 /** Parametr ?symulujBlad=1 w adresie pozwala sprawdzić stan błędu technicznego. */
 const SIMULATE_ERROR = new URLSearchParams(window.location.search).has('symulujBlad');
@@ -43,7 +41,7 @@ export function App() {
   useEffect(() => saveJson('przeczytane', readIds), [readIds]);
   useEffect(() => saveJson('preferencje', preferences), [preferences]);
 
-  const parcels = useMemo(() => summarizeParcels([...INITIAL_PARCELS, ...addedParcels]), [addedParcels]);
+  const parcels = useMemo(() => summarizeParcels(addedParcels), [addedParcels]);
   const notifications = useMemo(() => visibleNotifications(INITIAL_NOTIFICATIONS, preferences), [preferences]);
   const unreadCount = preferences.inApp ? notifications.filter((item) => !readIds.includes(item.id)).length : 0;
 
@@ -84,22 +82,11 @@ export function App() {
 
   let screen: ReactNode;
   switch (route.name) {
-    case 'dashboard':
-      screen = (
-        <DashboardScreen
-          user={CURRENT_USER}
-          parcels={parcels}
-          notifications={notifications}
-          readIds={readIds}
-          onMarkRead={markRead}
-        />
-      );
-      break;
     case 'parcels':
       screen = (
         <ParcelsScreen
           parcels={parcels}
-          lockedIds={LOCKED_IDS}
+          lockedIds={[]}
           onAdd={(parcel) => setAddedParcels((items) => [...items, parcel])}
           onRemove={(parcelId) => setAddedParcels((items) => items.filter((item) => item.parcelId !== parcelId))}
           onAnalyze={analyzeSaved}

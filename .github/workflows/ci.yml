@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,3 +29,17 @@ jobs:
             dist
             package-lock.json
           retention-days: 7
+      # Zbudowana wersja z gałęzi main trafia na gałąź `dist` – gotowa do hostingu statycznego
+      # (np. GitHub Pages) albo do otwarcia lokalnie bez instalowania Node.js.
+      - name: Publikacja na gałęzi dist
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          cp package-lock.json dist/package-lock.json.txt
+          touch dist/.nojekyll
+          cd dist
+          git init -q -b dist
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Build ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" dist

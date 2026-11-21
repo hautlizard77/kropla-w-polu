@@ -123,7 +123,8 @@ dopiero po kliknięciu, więc raport otwiera się niezależnie od niego.
 **Przepływ danych (serwer, EPSG:2180):**
 
 1. Granica działki z **ULDK** (`GetParcelById`, `srid=2180`).
-2. Wycinek **NMT** z Geoportalu (WCS `DTM_PL-KRON86-NH_TIFF`, GeoTIFF) w natywnej rozdzielczości usługi (siatka 1 m),
+2. **NMT** z usługi wysokości punktów GUGiK (`GetHByPointList`, siatka co 2–15 m, kilka–kilkanaście sekund);
+   gdy nie odpowie – wycinek z Geoportalu (WCS `DTM_PL-KRON86-NH_TIFF`, GeoTIFF) w natywnej rozdzielczości usługi (siatka 1 m),
    obejmujący działkę z otoczeniem (margines: połowa rozmiaru działki, od 100 do 300 m).
 3. **Analiza spływu** (własna implementacja, `server/terrain/`):
    - wypełnienie zagłębień Priority-Flood (Barnes i in. 2014) – wariant z ε do kierunków spływu i bez ε do głębokości zagłębień,
@@ -196,7 +197,7 @@ server/
   standalone.ts           serwer produkcyjny (dist/ + API)
   cache.ts                bufor w pamięci i na dysku
   geo/                    odwzorowania (EPSG:2180, UTM), czytnik GeoTIFF/COG, geometria
-  sources/                ULDK, NMT (WCS Geoportalu), Sentinel-2 (STAC + COG, NDMI)
+  sources/                ULDK, NMT (punkty GUGiK + WCS Geoportalu), Sentinel-2 (STAC + COG, NDMI)
   terrain/                hydrologia, analiza działki, dane demonstracyjne
 ```
 
@@ -252,7 +253,7 @@ Adres usługi ustawia się zmienną `VITE_ANALYSIS_API_URL`, np. w pliku `.env.l
 | Dane | Pobierane na bieżąco? | Data pobrania / obserwacji w raporcie |
 |---|---|---|
 | Granica działki – ULDK (GUGiK) | tak, przy pierwszym otwarciu działki, potem z bufora | data i godzina pobrania |
-| NMT – Geoportal WCS (GUGiK), 1 m | tak, przy pierwszym otwarciu „Teren i spływ”, potem z bufora | data pobrania; data nalotu LiDAR nie jest zwracana przez usługę |
+| NMT – usługa wysokości punktów GUGiK (zapas: Geoportal WCS 1 m) | tak, w tle przy analizie działki, potem z bufora | data pobrania; data nalotu LiDAR nie jest zwracana przez usługę |
 | Sentinel-2 L2A – Earth Search STAC + COG | tak, przy włączeniu NDMI, potem z bufora | data sceny, data pobrania, pokrycie działki |
 | Scenariusze demo (`src/data/demoScenarios.ts`, `server/terrain/demo.ts`) | nie – wartości ilustracyjne i syntetyczne | nie dotyczy |
 | Podkład mapy OpenStreetMap | tak – kafelki pobierane w przeglądarce | przy każdym wyświetleniu |
@@ -274,7 +275,7 @@ Ocenę niedoboru wody, historię i zalecenia aplikacja liczy z pogody, gleby i h
 | tsx, @types/node | uruchamianie serwera i testów w TypeScript | MIT |
 | Kafelki OpenStreetMap (`tile.openstreetmap.org`) | podkład mapy | dane © współtwórcy OpenStreetMap, ODbL; obowiązuje [polityka korzystania z kafelków](https://operations.osmfoundation.org/policies/tiles/) – przy większym ruchu trzeba przejść na własny lub komercyjny serwer kafelków |
 | ULDK (GUGiK) – `uldk.gugik.gov.pl` | granice działek | dane PZGiK udostępniane nieodpłatnie; warunki: [opis usługi](https://uldk.gugik.gov.pl/opis.html) |
-| NMT – Geoportal WCS (GUGiK) | model terenu | dane PZGiK udostępniane nieodpłatnie; warunki: [geoportal.gov.pl](https://www.geoportal.gov.pl) |
+| NMT – usługa wysokości GUGiK i Geoportal WCS | model terenu | dane PZGiK udostępniane nieodpłatnie; warunki: [geoportal.gov.pl](https://www.geoportal.gov.pl) |
 | Sentinel-2 L2A (Copernicus, ESA) przez Earth Search (Element 84) i AWS Open Data | NDMI | Copernicus – wolny i otwarty dostęp, wymagane przypisanie „Contains modified Copernicus Sentinel data [rok]” |
 | Open-Meteo (Archive, Forecast) | pogoda | dane CC BY 4.0; darmowe API tylko do użytku niekomercyjnego, dzienny limit zapytań |
 | NASA POWER (LaRC) | pogoda zapasowa | dane publiczne NASA, wymagane przypisanie źródła |
@@ -297,9 +298,10 @@ Aplikacja nie korzysta z modeli AI w czasie działania – wszystkie wyniki licz
 - Analiza topografii nie uwzględnia opadu, infiltracji, drenażu, przepustów ani rowów pod drogami. Nie liczymy głębokości zalania.
 - D8 prowadzi wodę do jednego sąsiada – rozpraszanie spływu na stokach jest pominięte (inaczej niż MFD w `r.watershed`).
 - Pobrany raster obejmuje działkę z otoczeniem; gdy obszar dopływu wychodzi poza niego, raport to podaje.
-- NMT: czas odpowiedzi usługi WCS bywa długi (dziesiątki sekund); limit oczekiwania 120 s (`KROPLA_NMT_TIMEOUT_MS`).
-  Żeby to ukryć, teren jest pobierany w tle już przy ocenie wody, działający wariant zapytania jest zapamiętywany (`.cache/nmt-meta`),
-  a obszar większy niż 0,25 km² jest pobierany w maks. 9 częściach równolegle i sklejany.
+- NMT: podstawowym źródłem jest usługa wysokości punktów GUGiK (`services.gugik.gov.pl/nmt`, GetHByPointList): siatka co 2–15 m
+  (do ok. 12 tys. punktów, 3 zapytania naraz), zwykle 5–15 s. Wysokości mają dokładność 0,1 m, a siatka jest rzadsza niż 1 m,
+  więc drobne formy terenu (bruzdy, wąskie rowy) mogą zniknąć. Gdy usługa nie odpowie, aplikacja pobiera WCS z Geoportalu
+  (1 m, ale zwykle 1–2 min, limit 120 s – `KROPLA_NMT_TIMEOUT_MS`). Teren jest pobierany w tle już przy ocenie wody.
 - NDMI ma rozdzielczość 20 m; przy małych działkach piksele graniczne mieszają sygnał z sąsiednich pól.
 - Nawadnianie: dawka orientacyjna z bilansu (do 30 mm), bez terminów i bez sprawdzania dostępu do wody.
 - Mapa Leaflet wymaga internetu (kafelki OSM). Bez nich działa stan awaryjny.

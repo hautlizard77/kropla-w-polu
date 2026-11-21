@@ -1,29 +1,53 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mosaic, splitBounds } from './nmt';
+import { fetchNmtPoints, parsePointList, pointGrid, pointStep } from './nmtPoints';
 
-test('mały obszar nie jest dzielony, duży dzielony na części z zakładką', () => {
-  assert.equal(splitBounds({ minX: 0, minY: 0, maxX: 400, maxY: 400 }).length, 1);
-  const tiles = splitBounds({ minX: 1000, minY: 2000, maxX: 2200, maxY: 3200 });
-  assert.equal(tiles.length, 4);
-  for (const t of tiles) {
-    assert.ok(t.minX >= 1000 && t.maxX <= 2200 && t.minY >= 2000 && t.maxY <= 3200);
+test('krok siatki rośnie z wielkością obszaru, liczba punktów zostaje w limicie', () => {
+  assert.equal(pointStep({ minX: 0, minY: 0, maxX: 200, maxY: 200 }), 2);
+  assert.equal(pointStep({ minX: 0, minY: 0, maxX: 320, maxY: 330 }), 3);
+  for (const side of [150, 400, 900, 1600, 3000]) {
+    const b = { minX: 0, minY: 0, maxX: side, maxY: side };
+    const { points } = pointGrid(b, pointStep(b));
+    assert.ok(points.length <= 12_000 || pointStep(b) === 15, `bok ${side} m: ${points.length} punktów`);
   }
-  // Części razem pokrywają cały obszar, sąsiednie zachodzą na siebie.
-  const xs = tiles.filter((t) => t.minY === 2000).sort((a, b) => a.minX - b.minX);
-  assert.ok(xs[0]!.maxX > xs[1]!.minX);
-  assert.equal(splitBounds({ minX: 0, minY: 0, maxX: 5000, maxY: 5000 }).length, 9);
 });
 
-test('mozaika skleja części według georeferencji', () => {
-  const grid = (originX: number, originY: number, width: number, height: number) => ({ width, height, cellSize: 1, originX, originY });
-  const fill = (n: number, v: number) => new Float64Array(n).fill(v);
-  // Dwie części 4×2 obok siebie z zakładką 1 kolumny.
-  const left = { values: fill(8, 1), grid: grid(0, 2, 4, 2) };
-  const right = { values: fill(8, 2), grid: grid(3, 2, 4, 2) };
-  const m = mosaic([left, right]);
-  assert.equal(m.grid.width, 7);
-  assert.equal(m.grid.height, 2);
-  assert.deepEqual(Array.from(m.values.subarray(0, 7)), [1, 1, 1, 1, 2, 2, 2]);
-  assert.ok(!m.values.some((v) => Number.isNaN(v)));
+test('środki komórek siatki leżą w punktach wysłanych do usługi', () => {
+  const { grid, points } = pointGrid({ minX: 1000.4, minY: 2000, maxX: 1010, maxY: 2009.6 }, 3);
+  assert.equal(points.length, grid.width * grid.height);
+  const [e, n] = points[grid.width + 1]!; // wiersz 1, kolumna 1
+  assert.equal(grid.originX + 1.5 * grid.cellSize, e);
+  assert.equal(grid.originY - 1.5 * grid.cellSize, n);
+});
+
+test('odpowiedź „x y h” (x = północ) trafia do właściwych punktów', () => {
+  const points: [number, number][] = [[453224, 535276], [453227, 535276]];
+  const values = parsePointList('535276 453227 81.4,535276 453224 80.9', points);
+  assert.deepEqual(Array.from(values), [80.9, 81.4]);
+  const none = parsePointList('535276 453224,535276 453227', points);
+  assert.ok(none.every((v) => Number.isNaN(v)));
+});
+
+test('pobranie ponawia paczkę zwróconą bez wysokości i składa raster', async () => {
+  const realFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+    calls += 1;
+    const list = new URLSearchParams(String(init?.body)).get('list') ?? '';
+    // Pierwsze zapytanie: przeciążona usługa – same współrzędne.
+    const body = list
+      .split(',')
+      .map((p) => (calls === 1 ? p : `${p} ${(100 + Number(p.split(' ')[1]) / 1000).toFixed(1)}`))
+      .join(',');
+    return new Response(body);
+  }) as typeof fetch;
+  try {
+    const dem = await fetchNmtPoints({ minX: 453200, minY: 535000, maxX: 453300, maxY: 535100 });
+    assert.equal(dem.grid.cellSize, 2);
+    assert.equal(dem.values.length, dem.grid.width * dem.grid.height);
+    assert.ok(dem.values.every((v) => Number.isFinite(v)));
+    assert.ok(calls > Math.ceil(dem.values.length / 1000), 'pierwsza paczka powinna być ponowiona');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });

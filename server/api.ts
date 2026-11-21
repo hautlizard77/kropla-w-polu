@@ -13,7 +13,7 @@ import { gzipSync } from 'node:zlib';
 import type { GridSpec, NdmiResponse, NdmiResult, ParcelInfo, TerrainResponse, TerrainResult } from '../src/types/terrain';
 import { cacheGet, cacheSet, once } from './cache';
 import { boundsOf, expand } from './geo/geometry';
-import { fetchNmt } from './sources/nmt';
+import { fetchDem } from './sources/nmt';
 import { NDMI_VERSION, computeNdmi } from './sources/sentinel';
 import { errorText, lookupParcel } from './sources/uldk';
 import { TERRAIN_VERSION, computeTerrain } from './terrain/analysis';
@@ -107,11 +107,11 @@ export async function terrain(parcelId: string): Promise<TerrainResponse> {
     const t1 = Date.now();
     let dem;
     try {
-      dem = parcel.origin === 'demo' ? demoDem(parcel) : await fetchNmt(expand(boundsOf(parcel.ring2180), marginFor(parcel)));
+      dem = parcel.origin === 'demo' ? demoDem(parcel) : await fetchDem(expand(boundsOf(parcel.ring2180), marginFor(parcel)));
     } catch (error) {
       return { status: 'error', message: errorText(error), stage: 'nmt' };
     }
-    timings.push({ label: parcel.origin === 'demo' ? 'Teren syntetyczny (demo)' : 'NMT z Geoportalu (WCS)', ms: Date.now() - t1 });
+    timings.push({ label: parcel.origin === 'demo' ? 'Teren syntetyczny (demo)' : 'Model terenu (GUGiK)', ms: Date.now() - t1 });
 
     const t2 = Date.now();
     const computed = computeTerrain({ parcel, values: dem.values, grid: dem.grid, demSource: dem.source });

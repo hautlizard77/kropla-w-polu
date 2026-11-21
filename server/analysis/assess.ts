@@ -17,11 +17,12 @@ import type {
 import type { ParcelInfo, SourceInfo } from '../../src/types/terrain';
 import type { HydroResult } from '../sources/hydro';
 import type { SoilProfile } from '../sources/soil';
-import { addDays, type WeatherSeries } from '../sources/weather';
+import { addDays, type ForecastSeries, type WeatherSeries } from '../sources/weather';
+import { FORECAST_MAX_AGE_DAYS, FORECAST_SOURCE_ID, buildForecast, notApplicableForecast, unavailableForecast } from './forecast';
 import { CROP_PARAMS, STAGE_LABELS, cropDay, type Stage } from '../../src/data/cropParams';
 import { readilyAvailableWater, totalAvailableWater } from './waterBalance';
 
-export const ASSESS_VERSION = 1;
+export const ASSESS_VERSION = 2;
 const STRESS_DAYS_FOR_DEFICIT_SEASON = 15;
 const MAX_DATA_LAG_DAYS = 7;
 
@@ -32,11 +33,17 @@ export interface AssessInput {
   soil: SoilProfile | null;
   hydro: HydroResult | null;
   now?: Date;
+  /** Prognoza Open-Meteo (tylko dla analizy na dziś lub ostatnie dni). */
+  forecast?: ForecastSeries | null;
+  forecastError?: string | null;
+  /** Dzisiejsza data w Polsce – decyduje, czy prognoza ma sens. */
+  todayDate?: string;
 }
 
-interface SimDay {
+export interface SimDay {
   date: string;
   dr: number;
+  etc: number;
   taw: number;
   raw: number;
   kc: number;
@@ -59,7 +66,7 @@ export function classify(dr: number, taw: number, raw: number): Exclude<RiskLeve
 /** Dzienny bilans z rosnącą strefą korzeni; zatrzymuje się na pierwszym dniu bez danych. */
 export function simulate(
   weather: WeatherSeries,
-  input: { cropId: AnalysisRequest['cropId']; horizons: SoilProfile['horizons']; tawScale: number; from: string; to: string },
+  input: { cropId: AnalysisRequest['cropId']; horizons: SoilProfile['horizons']; tawScale: number; from: string; to: string; initialDr?: number },
 ): SimDay[] {
   const p = CROP_PARAMS[input.cropId].p;
   const tawCache = new Map<number, number | null>();
@@ -70,7 +77,7 @@ export function simulate(
     return taw === null ? null : taw * input.tawScale;
   };
   const out: SimDay[] = [];
-  let dr = 0;
+  let dr = input.initialDr ?? 0;
   for (const day of weather.days) {
     if (day.date < input.from) continue;
     if (day.date > input.to) break;
@@ -83,7 +90,7 @@ export function simulate(
     const ks = dr <= raw ? 1 : Math.max(0, (taw - dr) / Math.max(1e-6, taw - raw));
     const etc = crop.kc * ks * day.et0Mm;
     dr = Math.min(taw, Math.max(0, dr - day.precipitationMm + etc));
-    out.push({ date: day.date, dr: Math.round(dr * 10) / 10, taw: Math.round(taw * 10) / 10, raw: Math.round(raw * 10) / 10, kc: crop.kc, stage: crop.stage, inSeason: crop.inSeason });
+    out.push({ date: day.date, dr: Math.round(dr * 10) / 10, etc: Math.round(etc * 10) / 10, taw: Math.round(taw * 10) / 10, raw: Math.round(raw * 10) / 10, kc: crop.kc, stage: crop.stage, inSeason: crop.inSeason });
   }
   return out;
 }
@@ -217,6 +224,26 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
     limitations,
   };
 
+  const todayDate = input.todayDate ?? now.toISOString().slice(0, 10);
+  const forecastApplies = request.analysisDate >= addDays(todayDate, -FORECAST_MAX_AGE_DAYS);
+  if (forecastApplies && input.forecast) {
+    dataSources.push(
+      toDataSource(FORECAST_SOURCE_ID, 'pogoda', input.forecast.source, {
+        license: 'CC BY 4.0',
+        observationDate: null,
+        coverage: input.forecast.days.length > 0 ? { from: input.forecast.days[0]!.date, to: input.forecast.days[input.forecast.days.length - 1]!.date } : null,
+        details: 'Prognoza dotyczy dni po dacie analizy – nie wpływa na ocenę na dzień analizy, tylko na zakładkę „Prognoza”.',
+      }),
+    );
+  }
+  const forecastFor = (state: SimDay | null, evalDay: string): AnalysisResult['forecast'] => {
+    if (!forecastApplies) {
+      return notApplicableForecast('Prognoza dotyczy najbliższych dni, więc pokazujemy ją dla analizy na dziś (albo na jeden z 3 ostatnich dni).');
+    }
+    if (!input.forecast) return unavailableForecast(input.forecastError ?? 'Usługa prognozy pogody nie odpowiedziała.');
+    return buildForecast({ request, forecast: input.forecast, evalDate: evalDay, state, horizons: soil?.horizons ?? null });
+  };
+
   // Wskaźniki pogodowe (niezależne od gleby).
   const weatherIndicators: Indicator[] = [];
   const lastDate = weather?.lastCompleteDate ?? null;
@@ -291,6 +318,7 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
       },
       recommendations: [],
       irrigation: { status: 'not_calculated', note: 'Bez bilansu wody nie oceniamy zasadności nawadniania.' },
+      forecast: forecastFor(null, lastDate && lastDate < request.analysisDate ? lastDate : request.analysisDate),
     };
   }
 
@@ -300,7 +328,7 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
   const [mainRun, lowRun, highRun] = runs as [SimDay[], SimDay[], SimDay[]];
   const today = mainRun[mainRun.length - 1];
   if (!today) {
-    return { ...base, currentState: insufficient(request, weatherIndicators), historicalVulnerability: insufficientHistory(), recommendations: [], irrigation: { status: 'not_calculated', note: 'Brak bilansu.' } };
+    return { ...base, currentState: insufficient(request, weatherIndicators), historicalVulnerability: insufficientHistory(), recommendations: [], irrigation: { status: 'not_calculated', note: 'Brak bilansu.' }, forecast: forecastFor(null, evalDate) };
   }
   const level = classify(today.dr, today.taw, today.raw);
   const lowLast = lowRun[lowRun.length - 1];
@@ -496,6 +524,7 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
           window: null,
           doseMm: null,
         },
+    forecast: forecastFor(today, evalDate),
   };
 }
 

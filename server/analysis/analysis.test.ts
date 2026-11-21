@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { ParcelInfo } from '../../src/types/terrain';
 import type { SoilProfile } from '../sources/soil';
 import { saxtonRawls } from '../sources/soil';
-import { addDays, dateRange, et0PenmanMonteith, type WeatherSeries } from '../sources/weather';
+import { addDays, dateRange, et0PenmanMonteith, type ForecastSeries, type WeatherSeries } from '../sources/weather';
 import { buildAssessment, classify, seasonStart } from './assess';
 import { cropDay } from '../../src/data/cropParams';
 import { classifyDepletion, readilyAvailableWater, runDepletion, stressCoefficient, totalAvailableWater } from './waterBalance';
@@ -182,4 +182,65 @@ test('różne uprawy na tym samym polu dają różną ocenę', () => {
   assert.notEqual(potatoes.currentState.summary, lucerne.currentState.summary);
   const order = { low: 0, moderate: 1, elevated: 2, insufficient_data: -1 } as const;
   assert.ok(order[potatoes.currentState.level] > order[lucerne.currentState.level], `${potatoes.currentState.level} vs ${lucerne.currentState.level}`);
+});
+
+function forecastSeries(start: string, n: number, f: (i: number) => { p: number; e: number; tMin?: number; tMax?: number }): ForecastSeries {
+  return {
+    issuedAt: '2024-07-01T06:00:00Z',
+    days: Array.from({ length: n }, (_, i) => {
+      const v = f(i);
+      return { date: addDays(start, i), precipitationMm: v.p, probabilityPct: v.p > 0 ? 80 : 10, et0Mm: v.e, tMax: v.tMax ?? 24, tMin: v.tMin ?? 12, past: false };
+    }),
+    source: { name: 'prognoza', provider: 'test', url: null, origin: 'observed', retrievedAt: null, observationDate: null, resolutionM: null, durationMs: null, notes: [] },
+  };
+}
+
+const dryHistory = (d: string): [number, number] => (d.slice(5, 7) >= '05' && d.slice(5, 7) <= '08' ? [1, 5] : [3, 1]);
+
+test('prognoza: w stresie, a za 2 dni ulewa – wstrzymaj nawadnianie, ostrzeżenie o ulewie, zapas rośnie', () => {
+  const weather = syntheticWeather('2014-03-01', '2024-07-01', dryHistory);
+  const result = buildAssessment({
+    request: { parcelId: parcel.id, cropId: 'ziemniaki', analysisDate: '2024-07-01' },
+    parcel, weather, soil: soil(0.14, 0.05, 'lekka'), hydro: null,
+    now: new Date('2024-07-01T12:00:00Z'), todayDate: '2024-07-01',
+    forecast: forecastSeries('2024-07-02', 10, (i) => ({ p: i === 1 ? 35 : 0, e: 4 })),
+  });
+  const f = result.forecast!;
+  assert.equal(f.status, 'ok');
+  assert.equal(f.days.length, 10);
+  const ids = f.advice.map((a) => a.id);
+  assert.ok(ids.includes('ulewa'), ids.join());
+  assert.ok(ids.includes('wstrzymaj-nawadnianie'), ids.join());
+  assert.ok((f.days[1]!.reservePct ?? 0) > (f.days[0]!.reservePct ?? 0));
+  assert.ok(result.dataSources.some((s) => s.id === 'prognoza'));
+});
+
+test('prognoza: dobry zapas, ale sucho i gorąco – ostrzeżenie, kiedy zacznie brakować wody', () => {
+  const wet = (d: string): [number, number] => (d.slice(5, 7) >= '05' && d.slice(5, 7) <= '08' ? [4, 3] : [3, 1]);
+  const weather = syntheticWeather('2014-03-01', '2024-07-01', wet);
+  const result = buildAssessment({
+    request: { parcelId: parcel.id, cropId: 'ziemniaki', analysisDate: '2024-07-01' },
+    parcel, weather, soil: soil(0.3, 0.13, 'średnia'), hydro: null,
+    now: new Date('2024-07-01T12:00:00Z'), todayDate: '2024-07-01',
+    forecast: forecastSeries('2024-07-02', 10, () => ({ p: 0, e: 6, tMax: 32 })),
+  });
+  assert.equal(result.currentState.level, 'low');
+  const ids = result.forecast!.advice.map((a) => a.id);
+  assert.ok(ids.includes('stres-wkrotce'), ids.join());
+  assert.ok(ids.includes('upal'), ids.join());
+});
+
+test('prognoza: analiza historyczna – prognoza nie dotyczy; poza sezonem – rada o zatrzymaniu wody', () => {
+  const weather = syntheticWeather('2014-03-01', '2024-11-20', dryHistory);
+  const past = buildAssessment({
+    request: { parcelId: parcel.id, cropId: 'ziemniaki', analysisDate: '2024-07-01' },
+    parcel, weather, soil: soil(0.3, 0.13, 'średnia'), hydro: null, todayDate: '2024-11-20', now: new Date('2024-11-20T12:00:00Z'),
+  });
+  assert.equal(past.forecast?.status, 'not_applicable');
+  const off = buildAssessment({
+    request: { parcelId: parcel.id, cropId: 'ziemniaki', analysisDate: '2024-11-20' },
+    parcel, weather, soil: soil(0.3, 0.13, 'średnia'), hydro: null, todayDate: '2024-11-20', now: new Date('2024-11-20T12:00:00Z'),
+    forecast: forecastSeries('2024-11-21', 10, (i) => ({ p: i % 2 ? 4 : 0, e: 0.5, tMin: -2, tMax: 3 })),
+  });
+  assert.deepEqual(off.forecast!.advice.map((a) => a.id), ['poza-sezonem', 'mroz']);
 });

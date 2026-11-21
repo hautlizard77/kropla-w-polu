@@ -185,7 +185,45 @@ export interface DataSource {
   details: string | null;
 }
 
+/** Jeden dzień prognozy z przewidywanym zapasem wody w glebie dla wybranej uprawy. */
+export interface ForecastDay {
+  date: IsoDate;
+  /** true – dzień przed dniem dzisiejszym (dane modelowe z ostatnich dni), false – prognoza. */
+  past: boolean;
+  precipitationMm: number | null;
+  probabilityPct: number | null;
+  et0Mm: number | null;
+  /** Zużycie wody przez uprawę (ETc), mm. */
+  etcMm: number | null;
+  tMax: number | null;
+  tMin: number | null;
+  /** Przewidywany zapas wody dostępnej w strefie korzeni, % pełnego zapasu. */
+  reservePct: number | null;
+  level: RiskLevel;
+}
+
+export interface ForecastAdvice {
+  id: string;
+  tone: 'good' | 'info' | 'warning';
+  title: string;
+  text: string;
+}
+
+export interface WaterForecast {
+  status: 'ok' | 'not_applicable' | 'unavailable';
+  message: string;
+  issuedAt: IsoDateTime | null;
+  /** Próg stresu (łatwo dostępna woda) w % zapasu – linia na wykresie. */
+  stressThresholdPct: number | null;
+  days: ForecastDay[];
+  advice: ForecastAdvice[];
+  totals: { rain3: number; rain7: number; rain10: number; etc7: number } | null;
+  sourceId: string | null;
+}
+
 export interface AnalysisResult {
+  /** Prognoza na najbliższe dni – tylko dla analizy na dziś (lub ostatnie dni) i działek z danymi. */
+  forecast?: WaterForecast;
   request: AnalysisRequest;
   /** true dla scenariuszy demonstracyjnych – raport musi to wyraźnie pokazać. */
   isDemo: boolean;

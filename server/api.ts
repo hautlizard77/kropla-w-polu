@@ -22,7 +22,8 @@ import type { AnalysisOutcome } from '../src/types/analysis';
 import { ASSESS_VERSION, buildAssessment } from './analysis/assess';
 import { getWaterways } from './sources/hydro';
 import { getSoil } from './sources/soil';
-import { addDays, getWeather } from './sources/weather';
+import { addDays, getForecast, getWeather } from './sources/weather';
+import { FORECAST_MAX_AGE_DAYS } from './analysis/forecast';
 import { demoDem, demoNdmi } from './terrain/demo';
 
 const PARCEL_ID = /^\d{6}_\d\.\d{4}(\.AR_\d+)?\.\d+[A-Za-z]?(\/\d+[A-Za-z]?)?$/;
@@ -189,10 +190,12 @@ export async function analysis(parcelId: string, cropId: string, date: string): 
     const lat = parcel.ringWgs84.reduce((s, p) => s + p[1], 0) / parcel.ringWgs84.length;
     const lon = parcel.ringWgs84.reduce((s, p) => s + p[0], 0) / parcel.ringWgs84.length;
     const start = `${Number(date.slice(0, 4)) - 10}-03-01`;
-    const [weather, soil, hydro] = await Promise.allSettled([
+    const wantsForecast = date >= addDays(today, -FORECAST_MAX_AGE_DAYS);
+    const [weather, soil, hydro, forecast] = await Promise.allSettled([
       getWeather(lat, lon, start, date, today),
       getSoil(lat, lon),
       getWaterways(parcel.id, parcel.ringWgs84, parcel.ring2180),
+      wantsForecast ? getForecast(lat, lon, today) : Promise.resolve(null),
     ]);
     const result = buildAssessment({
       request: { parcelId: parcel.id, cropId, analysisDate: date },
@@ -200,6 +203,9 @@ export async function analysis(parcelId: string, cropId: string, date: string): 
       weather: weather.status === 'fulfilled' ? weather.value : null,
       soil: soil.status === 'fulfilled' ? soil.value : null,
       hydro: hydro.status === 'fulfilled' ? hydro.value : null,
+      forecast: forecast.status === 'fulfilled' ? forecast.value : null,
+      forecastError: forecast.status === 'rejected' ? errorText(forecast.reason) : null,
+      todayDate: today,
     });
     const outcome: AnalysisOutcome = { status: 'ok', result };
     if (cacheable && result.currentState.level !== 'insufficient_data') await cacheSet('analysis', key, outcome);

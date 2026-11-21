@@ -228,3 +228,75 @@ export function et0PenmanMonteith(input: {
   const et0 = (0.408 * delta * rn + gamma * (900 / (tMean + 273)) * wind2m * (esMean - ea)) / (delta + gamma * (1 + 0.34 * wind2m));
   return Math.max(0, Math.round(et0 * 100) / 100);
 }
+
+export interface ForecastDayRaw {
+  date: string;
+  precipitationMm: number | null;
+  /** Największe prawdopodobieństwo opadu w ciągu dnia (%). */
+  probabilityPct: number | null;
+  et0Mm: number | null;
+  tMax: number | null;
+  tMin: number | null;
+  /** true – dzień już minął (dane modelowe z ostatnich dni), false – prognoza. */
+  past: boolean;
+}
+
+export interface ForecastSeries {
+  days: ForecastDayRaw[];
+  issuedAt: string;
+  source: SourceInfo;
+}
+
+const forecastMemory = new Map<string, { at: number; value: ForecastSeries }>();
+const FORECAST_TTL_MS = 60 * 60 * 1000;
+
+/** Prognoza dzienna na 10 dni (Open-Meteo, łączone modele numeryczne) i 7 ostatnich dni; bufor 1 h. */
+export async function getForecast(lat: number, lon: number, today: string): Promise<ForecastSeries> {
+  const rLat = Math.round(lat * 20) / 20;
+  const rLon = Math.round(lon * 20) / 20;
+  const key = `${rLat}:${rLon}:${today}`;
+  const hit = forecastMemory.get(key);
+  if (hit && Date.now() - hit.at < FORECAST_TTL_MS) return hit.value;
+  return once(`forecast:${key}`, async () => {
+    const t0 = Date.now();
+    const url =
+      `https://api.open-meteo.com/v1/forecast?latitude=${rLat}&longitude=${rLon}&past_days=7&forecast_days=10` +
+      '&daily=precipitation_sum,precipitation_probability_max,et0_fao_evapotranspiration,temperature_2m_max,temperature_2m_min' +
+      '&timezone=Europe%2FWarsaw';
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error(`Open-Meteo Forecast: HTTP ${response.status}`);
+    const json = (await response.json()) as {
+      daily?: {
+        time: string[];
+        precipitation_sum: (number | null)[];
+        precipitation_probability_max: (number | null)[];
+        et0_fao_evapotranspiration: (number | null)[];
+        temperature_2m_max: (number | null)[];
+        temperature_2m_min: (number | null)[];
+      };
+    };
+    const d = json.daily;
+    if (!d) throw new Error('Open-Meteo Forecast: brak danych dziennych');
+    const value: ForecastSeries = {
+      issuedAt: new Date().toISOString(),
+      days: d.time.map((date, i) => ({
+        date,
+        precipitationMm: d.precipitation_sum[i] ?? null,
+        probabilityPct: d.precipitation_probability_max[i] ?? null,
+        et0Mm: d.et0_fao_evapotranspiration[i] ?? null,
+        tMax: d.temperature_2m_max[i] ?? null,
+        tMin: d.temperature_2m_min[i] ?? null,
+        past: date < today,
+      })),
+      source: source(
+        'Prognoza opadu, ET0 i temperatury na 10 dni',
+        'Open-Meteo Forecast (najlepsze dostępne modele numeryczne dla punktu, m.in. ICON, ECMWF)',
+        'https://open-meteo.com/en/docs',
+        Date.now() - t0,
+        'Prognoza – im dalszy dzień, tym większa niepewność, szczególnie dla opadów konwekcyjnych (burz).',
+      ),
+    };
+    forecastMemory.set(key, { at: Date.now(), value });
+    return value;
+  });
+}

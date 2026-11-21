@@ -3,6 +3,7 @@ import { cropLabel } from '../data/crops';
 import { STAGE_LABELS, cropDay } from '../data/cropParams';
 import { CropBadge, CropPanel } from './CropPanel';
 import { ReportTabs, TabPanel, type TabDef, type TabId } from './ReportTabs';
+import { ForecastPanel } from './ForecastPanel';
 import { fetchTerrain } from '../services/terrain';
 import { formatDatePl, formatDateTimePl, formatMonthsPl, formatRangePl } from '../lib/dates';
 import { AVAILABILITY_LABELS, CATEGORY_LABELS, DATA_KIND_LABELS } from '../lib/labels';
@@ -214,6 +215,7 @@ function Report({
     { id: 'podsumowanie', label: 'Podsumowanie', icon: 'home' },
     { id: 'uprawa', label: 'Uprawa', icon: 'leaf' },
     { id: 'sytuacja', label: 'Sytuacja wodna', icon: 'drop', level: currentState.level },
+    { id: 'prognoza', label: 'Prognoza', icon: 'cloud' },
     { id: 'zalecenia', label: recCount > 0 ? `Co robić (${recCount})` : 'Co robić', icon: 'check' },
     { id: 'teren', label: 'Teren i spływ 3D', icon: 'parcels' },
     { id: 'zrodla', label: 'Źródła danych', icon: 'file' },
@@ -269,6 +271,17 @@ function Report({
                 </button>
               </dd>
             </div>
+            {result.forecast?.status === 'ok' && result.forecast.advice[0] && (
+              <div>
+                <dt>Najbliższe dni</dt>
+                <dd>
+                  {result.forecast.advice[0].title}.{' '}
+                  <button type="button" className="link-button no-print" onClick={() => openTab('prognoza')}>
+                    Prognoza i wskazówki
+                  </button>
+                </dd>
+              </div>
+            )}
             <div>
               <dt>Co na to wskazuje?</dt>
               <dd>{currentState.summary}</dd>
@@ -337,6 +350,10 @@ function Report({
             />
           </div>
         </section>
+      </TabPanel>
+
+      <TabPanel id="prognoza" active={tab}>
+        <ForecastPanel forecast={result.forecast} request={request} isDemo={result.isDemo} />
       </TabPanel>
 
       <TabPanel id="zalecenia" active={tab}>

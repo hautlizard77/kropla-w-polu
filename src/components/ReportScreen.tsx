@@ -190,8 +190,11 @@ function Report({
   headingRef: RefObject<HTMLHeadingElement | null>;
 }) {
   const sourcesById = useMemo(() => new Map(result.dataSources.map((source) => [source.id, source])), [result]);
-  // Cieków bez danych nie pokazujemy w tabeli źródeł (brak odpowiedzi usług to nie informacja dla rolnika).
-  const shownSources = useMemo(() => result.dataSources.filter((source) => !(source.id === 'hydro' && source.availability === 'missing')), [result]);
+  // Cieków, satelity i terenu bez danych nie pokazujemy w tabeli źródeł – brak opisuje treść oceny i ograniczenia.
+  const shownSources = useMemo(
+    () => result.dataSources.filter((source) => !(['hydro', 's2', 'nmt'].includes(source.id) && source.availability === 'missing')),
+    [result],
+  );
   const highlights = useMemo(
     () => result.recommendations.flatMap((rec) => (rec.suggestedArea ? [rec.suggestedArea] : [])),
     [result],

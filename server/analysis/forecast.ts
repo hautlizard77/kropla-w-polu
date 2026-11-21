@@ -17,6 +17,7 @@ import type { SoilProfile } from '../sources/soil';
 import type { ForecastDayRaw, ForecastSeries } from '../sources/weather';
 import { classify, type SimDay } from './assess';
 import { readilyAvailableWater, totalAvailableWater } from './waterBalance';
+import { runoffMm } from './observations';
 
 export const FORECAST_SOURCE_ID = 'prognoza';
 /** Bilans pokazujemy, gdy data analizy to dziś albo jeden z 3 ostatnich dni. */
@@ -59,6 +60,8 @@ export interface ForecastInput {
   state: SimDay | null;
   horizons: SoilProfile['horizons'] | null;
   areaHa: number | null;
+  /** CN spływu powierzchniowego (SCS) – jak w ocenie; brak = bez spływu. */
+  curveNumber?: number;
 }
 
 interface DayRun {
@@ -83,7 +86,7 @@ interface DayRun {
 }
 
 /** Dzienny bilans od ubytku dr0; z nawadnianiem – dawka rano, gdy zapas jest poniżej progu, a deszcz go nie uzupełni. */
-function runDays(cropId: AnalysisRequest['cropId'], horizons: SoilProfile['horizons'], dr0: number, days: ForecastDayRaw[], irrigate: boolean): DayRun[] {
+function runDays(cropId: AnalysisRequest['cropId'], horizons: SoilProfile['horizons'], dr0: number, days: ForecastDayRaw[], irrigate: boolean, curveNumber?: number): DayRun[] {
   const p = CROP_PARAMS[cropId].p;
   const tawCache = new Map<number, number>();
   const tawFor = (zr: number) => {
@@ -114,8 +117,10 @@ function runDays(cropId: AnalysisRequest['cropId'], horizons: SoilProfile['horiz
     const etcPotential = crop.kc * et0;
     const etcActual = etcPotential * ks;
     const before = dr + etcActual;
-    const rainUsed = Math.min(rain, before);
-    dr = Math.min(taw, Math.max(0, before - rain));
+    // Część ulewy spływa po powierzchni (SCS-CN) – do gleby trafia reszta.
+    const infiltrated = rain - (curveNumber ? runoffMm(rain, curveNumber) : 0);
+    const rainUsed = Math.min(infiltrated, before);
+    dr = Math.min(taw, Math.max(0, before - infiltrated));
     out.push({
       date: day.date,
       past: day.past,
@@ -167,8 +172,8 @@ export function buildForecast(input: ForecastInput): WaterForecast {
   }
 
   // Dni, które już minęły (brak ich w archiwum), przesuwają stan do „dziś” – bez nawadniania.
-  const dry = runDays(request.cropId, horizons, state.dr, raw, false);
-  const withIrrigation = runDays(request.cropId, horizons, state.dr, raw, true);
+  const dry = runDays(request.cropId, horizons, state.dr, raw, false, input.curveNumber);
+  const withIrrigation = runDays(request.cropId, horizons, state.dr, raw, true, input.curveNumber);
   const future = dry.filter((d) => !d.past);
   const pastRuns = dry.filter((d) => d.past);
   const startDr = pastRuns.length > 0 ? pastRuns[pastRuns.length - 1]!.dr : state.dr;

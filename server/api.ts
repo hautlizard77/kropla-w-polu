@@ -102,10 +102,6 @@ function marginFor(parcel: ParcelInfo): number {
 }
 
 /** Uruchamia pobranie terenu bez czekania na wynik; równoległe zapytanie z panelu dołączy do tego samego pobierania. */
-export function prefetchTerrain(parcelId: string): void {
-  terrain(parcelId).catch(() => undefined);
-}
-
 export async function terrain(parcelId: string): Promise<TerrainResponse> {
   const key = `v${TERRAIN_VERSION}:${parcelId}`;
   const started = Date.now();
@@ -158,7 +154,9 @@ function fallbackGrid(parcel: ParcelInfo): GridSpec {
 }
 
 export async function ndmi(parcelId: string, date: string): Promise<NdmiResponse> {
-  const key = `v${NDMI_VERSION}:${parcelId}:${date}`;
+  // NDMI liczymy na siatce terenu (nakładka w widoku 3D); bez terenu – na siatce zastępczej, osobno w buforze.
+  const terrainReady = await cacheGet<TerrainResult>('terrain', `v${TERRAIN_VERSION}:${parcelId}`);
+  const key = `v${NDMI_VERSION}:${parcelId}:${date}${terrainReady ? '' : ':bez-terenu'}`;
   const started = Date.now();
   const cached = await cacheGet<NdmiResult>('ndmi', key);
   if (cached) return { status: 'ok', result: { ...cached, cached: true, timings: [{ label: 'Odczyt wyniku z bufora', ms: Date.now() - started }] } };
@@ -167,8 +165,7 @@ export async function ndmi(parcelId: string, date: string): Promise<NdmiResponse
     if (lookup.status === 'not_found') return { status: 'not_found', message: lookup.message };
     if (lookup.status === 'error') return { status: 'error', message: lookup.message, stage: 'uldk' };
     const parcel = lookup.parcel;
-    const terrainCached = await cacheGet<TerrainResult>('terrain', `v${TERRAIN_VERSION}:${parcelId}`);
-    const grid = terrainCached?.displayGrid ?? fallbackGrid(parcel);
+    const grid = terrainReady?.displayGrid ?? fallbackGrid(parcel);
     try {
       const computed = parcel.origin === 'demo' ? demoNdmi(parcel, date, grid) : await computeNdmi(parcel, date, grid);
       const result: NdmiResult = { ...computed, cached: false };
@@ -180,6 +177,20 @@ export async function ndmi(parcelId: string, date: string): Promise<NdmiResponse
   });
 }
 
+const TERRAIN_WAIT_MS = 15000;
+const OBSERVATIONS_WAIT_MS = 24000;
+
+/** Wynik obietnicy albo 'timeout' po ms – sama obietnica liczy się dalej (i zapisze wynik w buforze). */
+function within<T>(promise: Promise<T>, ms: number): Promise<T | 'timeout'> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 function todayWarsaw(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Warsaw', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
@@ -189,8 +200,6 @@ export async function analysis(parcelId: string, cropId: string, date: string): 
   if (!isCropId(cropId)) return { status: 'error', message: 'Nieznana uprawa.', stage: 'input' };
   const today = todayWarsaw();
   if (date > today) return { status: 'error', message: 'Data analizy nie może być z przyszłości.', stage: 'input' };
-  // Teren pobieramy w tle już teraz – zanim rolnik otworzy „Teren i spływ 3D”, wynik jest zwykle gotowy.
-  prefetchTerrain(parcelId);
   const key = `v${ASSESS_VERSION}:${parcelId}:${cropId}:${date}`;
   const cacheable = date <= addDays(today, -10);
   if (cacheable) {
@@ -208,12 +217,21 @@ export async function analysis(parcelId: string, cropId: string, date: string): 
     const lon = parcel.ringWgs84.reduce((s, p) => s + p[0], 0) / parcel.ringWgs84.length;
     const start = `${Number(date.slice(0, 4)) - 10}-03-01`;
     const wantsForecast = date >= addDays(today, -FORECAST_MAX_AGE_DAYS);
-    const [weather, soil, hydro, forecast] = await Promise.allSettled([
+    // Teren, a po nim NDMI (na siatce terenu) – równolegle z pogodą i glebą, z limitem czasu, żeby ocena mieściła się
+    // w ok. 30 s. Gdy nie zdążą, liczą się dalej w tle i trafiają do bufora – kolejne otwarcie raportu je uwzględni.
+    const started = Date.now();
+    const terrainP = within(terrain(parcelId), TERRAIN_WAIT_MS);
+    const ndmiP = terrainP.then(() => within(ndmi(parcelId, date), Math.max(1000, OBSERVATIONS_WAIT_MS - (Date.now() - started))));
+    const [weather, soil, hydro, forecast, terrainRes, ndmiRes] = await Promise.allSettled([
       getWeather(lat, lon, start, date, today),
       getSoil(lat, lon),
       getWaterways(parcel.id, parcel.ringWgs84, parcel.ring2180),
       wantsForecast ? getForecast(lat, lon, today) : Promise.resolve(null),
+      terrainP,
+      ndmiP,
     ]);
+    const terrainOut = terrainRes.status === 'fulfilled' ? terrainRes.value : null;
+    const ndmiOut = ndmiRes.status === 'fulfilled' ? ndmiRes.value : null;
     const result = buildAssessment({
       request: { parcelId: parcel.id, cropId, analysisDate: date },
       parcel,
@@ -223,9 +241,24 @@ export async function analysis(parcelId: string, cropId: string, date: string): 
       forecast: forecast.status === 'fulfilled' ? forecast.value : null,
       forecastError: forecast.status === 'rejected' ? errorText(forecast.reason) : null,
       todayDate: today,
+      terrain: terrainOut && terrainOut !== 'timeout' && terrainOut.status === 'ok' ? terrainOut.result : null,
+      terrainError:
+        terrainOut === 'timeout' || terrainOut === null
+          ? 'Model terenu nie zdążył się pobrać – liczy się w tle.'
+          : terrainOut.status !== 'ok'
+            ? terrainOut.message
+            : null,
+      ndmi: ndmiOut && ndmiOut !== 'timeout' && ndmiOut.status === 'ok' ? ndmiOut.result : null,
+      ndmiError:
+        ndmiOut === 'timeout' || ndmiOut === null
+          ? 'Zdjęcie satelitarne nie zdążyło się pobrać – ocena opiera się na bilansie wody.'
+          : ndmiOut.status !== 'ok'
+            ? 'Zdjęcie satelitarne jest chwilowo niedostępne – ocena opiera się na bilansie wody.'
+            : null,
     });
     const outcome: AnalysisOutcome = { status: 'ok', result };
-    if (cacheable && result.currentState.level !== 'insufficient_data') await cacheSet('analysis', key, outcome);
+    const complete = terrainOut !== 'timeout' && ndmiOut !== 'timeout' && ndmiOut !== null;
+    if (cacheable && complete && result.currentState.level !== 'insufficient_data') await cacheSet('analysis', key, outcome);
     return outcome;
   });
 }

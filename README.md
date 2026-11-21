@@ -100,7 +100,7 @@ widać przy dzwonku i w menu. Dodane działki, przeczytane powiadomienia i ustaw
 ## Ocena wody dla dowolnej działki
 
 Dla każdej działki spoza demo serwer liczy ocenę na żywo (`GET /api/analysis?id=…&crop=…&date=YYYY-MM-DD`).
-Granica z ULDK daje środek działki, a dla niego pobierane są równolegle trzy grupy danych:
+Granica z ULDK daje środek działki, a dla niego pobierane są równolegle: pogoda, gleba, cieki, model terenu i NDMI:
 
 | Dane | Źródło (kolejność) | Co z nich liczymy |
 |---|---|---|
@@ -132,8 +132,25 @@ wody), przymrozek ≤ 0 °C w młodych fazach, upał ≥ 30 °C, okres najwięks
 - dane późniejsze niż data analizy nie są używane (test w `server/analysis/analysis.test.ts`);
 - gdy pogoda kończy się ponad 7 dni przed datą analizy albo brak gleby – raport mówi „Za mało danych” i nie daje zaleceń.
 
-Zalecenia powstają z reguł opartych na wynikach (rów ≤ 100 m, lekka gleba lub mała retencja, bieżący stres, krytyczne miesiące w historii);
-każde podaje uzasadnienie z liczbami. Wyniki są buforowane (pamięć + `.cache/`); pierwsze liczenie trwa zwykle 5–30 s.
+**Teren i satelita w diagnozie** (`server/analysis/observations.ts`). Ocena czeka na NMT do 15 s, a na NDMI łącznie do 24 s
+(równolegle z pogodą i glebą); gdy nie zdążą, liczą się w tle, ocena mówi, czego zabrakło, i nie trafia do bufora.
+- **Spływ powierzchniowy (NMT → bilans):** do gleby wsiąka opad pomniejszony o spływ (FAO-56: P − RO). Spływ dobowy metodą
+  SCS-CN (USDA NEH-630): CN z tabel dla pokrycia (uprawy rzędowe / zboża / łąki) i grupy hydrologicznej gleby
+  (lekka A, średnia B, ciężka C), z poprawką Williamsa (1995) na średnie nachylenie działki z NMT. Bez NMT – nachylenie 2°.
+  Raport podaje opad, który spłynął od 1 marca, i średni spływ w sezonie z 10 lat (mm i m³ z działki). To samo w prognozie.
+- **NDMI (Sentinel-2 → ocena):** mediana NDMI z najnowszej bezchmurnej sceny (≤ 10 dni przed analizą) interpretowana według
+  fazy uprawy (Gao 1996): w pełni rozwoju ≥ 0,20 dobre uwodnienie, < 0,05 wyraźny niedobór; w fazie rozwoju 0,10 / −0,05;
+  w fazie początkowej, dojrzewania i poza sezonem NDMI opisuje glebę lub zasychanie – bez wniosków. Obserwacja jest drugim,
+  niezależnym sygnałem: zgodność z bilansem potwierdza wynik, różnica o dwie klasy przesuwa ocenę o jeden stopień w stronę
+  obserwacji i oznacza wynik jako niepewny. Wskaźnik ma oznaczenie „dowód pośredni”.
+- **Satelita × teren:** mediana NDMI w górnej i dolnej trzeciej części wysokości działki (gdy deniwelacja ≥ 1,5 m); suchsza
+  górna część to obserwacyjne potwierdzenie odpływu wody w dół stoku. Odsetek pikseli odbiegających od reszty pola też trafia do opisu.
+- **Zalecenia z terenu:** „Zatrzymaj wodę w obniżeniu / spowolnij wodę tam, gdzie spływ zbiera się w strugę” – wskazane miejsce
+  z analizy NMT (zagłębienie lub koncentracja spływu) jest zaznaczone na mapie w zakładce „Zalecenia”, z pojemnością i ilością
+  wody, która odpływa; „Ogranicz spływ wody ze stoku” – przy nachyleniu ≥ 3° lub ≥ 20% działki powyżej 5° i spływie ≥ 3 mm/sezon.
+
+Zalecenia powstają z reguł opartych na wynikach (rów ≤ 100 m, lekka gleba lub mała retencja, bieżący stres, krytyczne miesiące
+w historii, spływ i miejsca z NMT, NDMI); każde podaje uzasadnienie z liczbami. Wyniki są buforowane (pamięć + `.cache/`); pierwsze liczenie trwa zwykle 5–30 s.
 
 ## Teren i spływ 3D
 
@@ -157,7 +174,7 @@ jest osobnym plikiem ładowanym równolegle, więc reszta raportu pokazuje się 
    - **nachylenie** (metoda Horna) i klasy nachylenia,
    - **obszar do sprawdzenia pod kątem retencji**: zagłębienie o największym obszarze dopływu (ważone głębokością),
      a gdy go brak – miejsce najsilniejszego skupienia spływu na możliwie płaskim terenie; z uzasadnieniem liczbowym.
-4. **NDMI** (na żądanie, przełącznik „NDMI”): sceny **Sentinel-2 L2A** z katalogu Earth Search (STAC) z daty analizy
+4. **NDMI** (liczony już przy ocenie – wchodzi do diagnozy; w widoku 3D jako warstwa „NDMI”): sceny **Sentinel-2 L2A** z katalogu Earth Search (STAC) z daty analizy
    lub wcześniejszych (45 dni wstecz, dzień liczony w strefie Europe/Warsaw). Z plików COG czytamy tylko fragment działki
    (zapytania HTTP Range): najpierw maskę **SCL** – zostają klasy 4 (roślinność), 5 (grunt), 6 (woda); odrzucamy chmury,
    cienie, cirrus, śnieg, nasycenie, piksele niesklasyfikowane i braki. Wybieramy najnowszą scenę z co najmniej 60%

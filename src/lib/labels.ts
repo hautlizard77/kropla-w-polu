@@ -1,4 +1,4 @@
-import type { Availability, DataKind, RecommendationCategory, RiskLevel } from '../types/analysis';
+import type { DataStatus, DataKind, RecommendationCategory, RiskLevel } from '../types/analysis';
 
 /** Teksty stanów ryzyka – kolor w interfejsie tylko wspiera te etykiety. */
 export const RISK_LABELS: Record<RiskLevel, string> = {
@@ -25,9 +25,10 @@ export const DATA_KIND_LABELS: Record<DataKind, string> = {
   hydrologia: 'Wody i melioracje',
 };
 
-export const AVAILABILITY_LABELS: Record<Availability, string> = {
-  available: 'Dostępne',
-  partial: 'Niepełne',
+export const DATA_STATUS_LABELS: Record<DataStatus, string> = {
+  observed: 'Dane obserwowane',
+  demo: 'Dane demonstracyjne',
+  partial: 'Dane niepełne',
   missing: 'Brak danych',
 };
 

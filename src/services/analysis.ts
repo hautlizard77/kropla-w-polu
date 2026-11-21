@@ -84,9 +84,31 @@ export function analyzeWithDemoScenarios(request: AnalysisRequest, now: Date = n
 }
 
 function toResult(scenario: DemoScenario, now: Date): AnalysisResult {
-  const result: AnalysisResult = { ...scenario.result, generatedAt: now.toISOString() };
+  const result: AnalysisResult = applyEvidenceRules({ ...scenario.result, generatedAt: now.toISOString() });
   assertNoFutureObservations(result);
   return result;
+}
+
+/**
+ * Lokalizację retencji wskazujemy tylko wtedy, gdy są dane o terenie i o hydrologii.
+ * Bez nich zalecenie zostaje, ale bez obszaru na mapie – z prośbą o sprawdzenie w terenie.
+ */
+export function applyEvidenceRules(result: AnalysisResult): AnalysisResult {
+  const hasData = (kind: 'teren' | 'hydrologia') =>
+    result.dataSources.some((source) => source.kind === kind && source.status !== 'missing');
+  if (hasData('teren') && hasData('hydrologia')) return result;
+  return {
+    ...result,
+    recommendations: result.recommendations.map((rec) =>
+      rec.suggestedArea
+        ? {
+            ...rec,
+            suggestedArea: null,
+            fieldChecks: [...rec.fieldChecks, 'Brak danych o terenie lub ciekach – miejsce działania wskaż na podstawie oględzin.'],
+          }
+        : rec,
+    ),
+  };
 }
 
 /**

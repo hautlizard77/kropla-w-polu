@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { cropLabel } from '../data/crops';
 import { formatDatePl, formatDateTimePl, formatMonthsPl, formatRangePl } from '../lib/dates';
-import { AVAILABILITY_LABELS, CATEGORY_LABELS, DATA_KIND_LABELS } from '../lib/labels';
+import { DATA_STATUS_LABELS, CATEGORY_LABELS, DATA_KIND_LABELS } from '../lib/labels';
 import { sameRequest } from '../lib/route';
 import { AnalysisError, analyzeParcel } from '../services/analysis';
 import type {
@@ -313,13 +313,13 @@ function Report({
                     <span className="muted">{source.provider}</span>
                   </td>
                   <td>
-                    <span className={`availability availability--${source.availability}`}>
-                      {AVAILABILITY_LABELS[source.availability]}
+                    <span className={`availability availability--${source.status}`}>
+                      {DATA_STATUS_LABELS[source.status]}
                     </span>
                   </td>
                   <td>{source.observationDate ? formatDatePl(source.observationDate) : '—'}</td>
                   <td>{source.coverage ? formatRangePl(source.coverage) : '—'}</td>
-                  <td>{source.retrievedAt ? formatDatePl(source.retrievedAt) : result.isDemo ? 'nie pobrano (demo)' : '—'}</td>
+                  <td>{source.retrievedAt ? formatDatePl(source.retrievedAt) : 'nie pobrano'}</td>
                 </tr>
               ))}
             </tbody>
@@ -444,14 +444,25 @@ function RecommendationGroup({
               <strong>Dlaczego:</strong> {rec.rationale}
             </p>
             {rec.evidenceSourceIds.length > 0 && (
-              <p className="small muted">
-                Na podstawie:{' '}
-                {rec.evidenceSourceIds
-                  .map((id) => sourcesById.get(id))
-                  .filter((source): source is DataSource => Boolean(source))
-                  .map((source) => DATA_KIND_LABELS[source.kind].toLowerCase())
-                  .join(', ')}
-              </p>
+              <div className="evidence">
+                <p>
+                  <strong>Dowody:</strong>
+                </p>
+                <ul>
+                  {rec.evidenceSourceIds
+                    .map((id) => sourcesById.get(id))
+                    .filter((source): source is DataSource => Boolean(source))
+                    .map((source) => (
+                      <li key={source.id} className="small">
+                        {DATA_KIND_LABELS[source.kind]}: {source.name} –{' '}
+                        {source.observationDate ? `obserwacja z ${formatDatePl(source.observationDate)}` : 'bez daty obserwacji'}
+                        {' · '}
+                        {DATA_STATUS_LABELS[source.status].toLowerCase()}
+                        {source.limitations[0] && <span className="muted"> · ograniczenie: {source.limitations[0]}</span>}
+                      </li>
+                    ))}
+                </ul>
+              </div>
             )}
             {rec.fieldChecks.length > 0 && (
               <div className="field-checks">
@@ -482,7 +493,7 @@ function SourceDetails({ source }: { source: DataSource }) {
     <details className="source">
       <summary>
         {DATA_KIND_LABELS[source.kind]}: {source.name}{' '}
-        <span className="muted">({AVAILABILITY_LABELS[source.availability].toLowerCase()})</span>
+        <span className="muted">({DATA_STATUS_LABELS[source.status].toLowerCase()})</span>
       </summary>
       <dl className="source__meta">
         <div>

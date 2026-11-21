@@ -836,11 +836,11 @@ details > summary {
   margin-right: 0.3rem;
 }
 
-.availability--available {
+.availability--observed {
   color: var(--risk-low);
 }
 
-.availability--available::before {
+.availability--observed::before {
   content: '✓';
 }
 
@@ -850,6 +850,14 @@ details > summary {
 
 .availability--partial::before {
   content: '◐';
+}
+
+.availability--demo {
+  color: var(--risk-moderate);
+}
+
+.availability--demo::before {
+  content: '◇';
 }
 
 .availability--missing {

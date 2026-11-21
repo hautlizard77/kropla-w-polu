@@ -4,7 +4,7 @@
  * Zasady modelu:
  * - Daty kalendarzowe przechowujemy jako napisy `YYYY-MM-DD` (IsoDate), bez godzin i stref,
  *   żeby uniknąć przesunięć o jeden dzień.
- * - Brak danych modelujemy wprost (`null`, `availability: 'missing'`, poziom `insufficient_data`),
+ * - Brak danych modelujemy wprost (`null`, `status: 'missing'`, poziom `insufficient_data`),
  *   nigdy przez wstawienie zera ani domyślnej oceny.
  * - Rozróżniamy: datę analizy (wybraną przez rolnika), datę obserwacji (kiedy dane opisują stan),
  *   datę pobrania (kiedy system je pobrał) i zakres danych historycznych.
@@ -37,7 +37,7 @@ export type CropId =
 export interface Crop {
   id: CropId;
   label: string;
-  /** Miesiące (1–12), w których uprawa jest najbardziej wrażliwa na niedobór wody. */
+  /** Miesiące (1–12) okresu krytycznego – orientacyjne, do zastąpienia danymi z katalogu upraw. */
   criticalMonths: number[];
 }
 
@@ -73,7 +73,14 @@ export type RiskLevel = 'elevated' | 'moderate' | 'low' | 'insufficient_data';
 /** Grupy danych wykorzystywane przez docelowy silnik. */
 export type DataKind = 'granice' | 'teren' | 'pogoda' | 'satelita' | 'gleba' | 'hydrologia';
 
-export type Availability = 'available' | 'partial' | 'missing';
+/**
+ * Stan danych źródła:
+ * - observed – dane pobrane z rzeczywistego źródła,
+ * - demo – wartości ilustracyjne wpisane na potrzeby pokazu (nie pobrano ich),
+ * - partial – dane niepełne (np. zachmurzenie, luka w serii),
+ * - missing – brak danych.
+ */
+export type DataStatus = 'observed' | 'demo' | 'partial' | 'missing';
 
 /** Pojedynczy wskaźnik użyty jako dowód w ocenie. */
 export interface Indicator {
@@ -154,7 +161,7 @@ export interface DataSource {
   provider: string;
   url: string | null;
   license: string | null;
-  availability: Availability;
+  status: DataStatus;
   /** Data stanu, który opisują dane; null, jeśli brak obserwacji. Nie może być późniejsza niż data analizy. */
   observationDate: IsoDate | null;
   /** Kiedy dane zostały pobrane lub przetworzone; null, jeśli nie pobrano. */

@@ -11,8 +11,9 @@ Rolnik wskazuje działkę ewidencyjną, wybiera uprawę i datę analizy. W odpow
 
 > **Stan:** dla **dowolnej działki w Polsce** aplikacja pobiera granicę z ULDK, Numeryczny Model Terenu z Geoportalu
 > i sceny Sentinel-2, liczy spływ i NDMI oraz wskazuje obszar do sprawdzenia pod kątem retencji („Teren i spływ 3D”).
-> Ocena niedoboru wody na wybrany dzień (pogoda, gleba) i zalecenia agrotechniczne działają na razie tylko dla trzech
-> **jawnie oznaczonych przykładów demonstracyjnych** – dla innych działek raport mówi „Za mało danych” i pokazuje rzeczywisty stan źródeł.
+> Ocena niedoboru wody na wybrany dzień, historia 10 sezonów i zalecenia też są liczone dla każdej działki – z pogody
+> (Open-Meteo / NASA POWER), gleby (ISRIC SoilGrids) i cieków (OpenStreetMap). Trzy **jawnie oznaczone przykłady demonstracyjne**
+> zostały jako tryb pokazowy bez internetu.
 
 Opis zadania: [`docs/zadanie-KOWR-HackNation-2026.pdf`](docs/zadanie-KOWR-HackNation-2026.pdf) ·
 założenia tej iteracji: [`docs/zalozenia-iteracji-1.md`](docs/zalozenia-iteracji-1.md)
@@ -81,7 +82,7 @@ widać przy dzwonku i w menu. Dodane działki, przeczytane powiadomienia i ustaw
 - **Raport** (`#/raport?dzialka=…&uprawa=…&data=…`): ma własny adres, więc działa odświeżanie, przycisk „Wstecz” i udostępnianie linku.
   1. **Sytuacja wodna**: ocena na wybrany dzień, wskaźniki z datami obserwacji i oddzielna ocena historycznej podatności działki.
   2. **Co możesz zrobić**: zalecenia retencyjne i agrotechniczne (działanie, uzasadnienie oparte na danych, rzeczy do sprawdzenia w terenie)
-     oraz mapa z sugerowanym obszarem działania. Sekcja nawadniania jest elementem modelu, ale w tej wersji nie liczy dawek ani terminów.
+     oraz mapa z sugerowanym obszarem działania. Sekcja nawadniania podaje, czy nawadnianie jest uzasadnione, i orientacyjną dawkę (do 30 mm jednorazowo).
   3. **Na czym opiera się wynik**: tabela źródeł (rodzaj, źródło, stan danych, data obserwacji, zakres, data pobrania)
      z rozwijanymi szczegółami, licencjami i ograniczeniami.
   - „Drukuj lub zapisz PDF” używa natywnego wydruku przeglądarki. Style wydruku ukrywają nawigację i przyciski,
@@ -90,6 +91,29 @@ widać przy dzwonku i w menu. Dodane działki, przeczytane powiadomienia i ustaw
   link „Przejdź do treści”, nawigacja klawiaturą (lista działek jako przyciski, bo mapa nie jest dostępna z klawiatury),
   komunikaty stanu w regionach `aria-live`. Poziom ryzyka zawsze ma tekst i symbol, a kolor tylko go wspiera.
 - **Układ**: na komputerze formularz i mapa są obok siebie, na telefonie formularz jest przed mapą.
+
+## Ocena wody dla dowolnej działki
+
+Dla każdej działki spoza demo serwer liczy ocenę na żywo (`GET /api/analysis?id=…&crop=…&date=YYYY-MM-DD`).
+Granica z ULDK daje środek działki, a dla niego pobierane są równolegle trzy grupy danych:
+
+| Dane | Źródło (kolejność) | Co z nich liczymy |
+|---|---|---|
+| Pogoda dzienna, 10 lat wstecz | 1. Open-Meteo Archive (ERA5) → 2. NASA POWER (gdy Open-Meteo odmówi, np. limit 429; ET0 liczymy sami wzorem FAO-56 Penman–Monteith) → 3. Open-Meteo Forecast `past_days` uzupełnia ostatnie dni | opad, ET0, opad 30 dni i klimatyczny bilans wodny 60 dni na tle średniej 10 lat |
+| Gleba | ISRIC SoilGrids 2.0 (WCS, 250 m): piasek, ił, węgiel organiczny w 6 warstwach do 2 m | uziarnienie, kategoria gleby, θFC i θWP wzorami Saxton & Rawls (2006), woda dostępna TAW w strefie korzeni |
+| Cieki i rowy | OpenStreetMap przez Overpass API (2 serwery zapasowe), promień 300 m | najbliższy ciek/rów i odległość od działki – podstawa zalecenia o zatrzymaniu wody w rowie |
+
+**Model (FAO-56, dzienny bilans wody w strefie korzeni):**
+- start 1 marca z pełnym zapasem (gleba po zimie zwykle jest w polowej pojemności wodnej);
+- ETc = Kc · ET0, Kc i głębokość korzeni z typowego polskiego kalendarza uprawy (`server/analysis/cropParams.ts`);
+- ubytek Dr ≤ RAW → niskie ryzyko; Dr ≤ RAW + ½(TAW − RAW) → umiarkowane; powyżej → podwyższone;
+- niepewność: obliczenie powtarzamy dla TAW ×0,75 i ×1,25; gdy wyniki dają inne klasy, raport to pokazuje;
+- historia: te same obliczenia dla 10 poprzednich sezonów; sezon z niedoborem to ≥ 15 dni stresu, miesiąc krytyczny – stres w ≥ 30% sezonów;
+- dane późniejsze niż data analizy nie są używane (test w `server/analysis/analysis.test.ts`);
+- gdy pogoda kończy się ponad 7 dni przed datą analizy albo brak gleby – raport mówi „Za mało danych” i nie daje zaleceń.
+
+Zalecenia powstają z reguł opartych na wynikach (rów ≤ 100 m, lekka gleba lub mała retencja, bieżący stres, krytyczne miesiące w historii);
+każde podaje uzasadnienie z liczbami. Wyniki są buforowane (pamięć + `.cache/`); pierwsze liczenie trwa zwykle 5–30 s.
 
 ## Teren i spływ 3D
 
@@ -232,10 +256,12 @@ Adres usługi ustawia się zmienną `VITE_ANALYSIS_API_URL`, np. w pliku `.env.l
 | Sentinel-2 L2A – Earth Search STAC + COG | tak, przy włączeniu NDMI, potem z bufora | data sceny, data pobrania, pokrycie działki |
 | Scenariusze demo (`src/data/demoScenarios.ts`, `server/terrain/demo.ts`) | nie – wartości ilustracyjne i syntetyczne | nie dotyczy |
 | Podkład mapy OpenStreetMap | tak – kafelki pobierane w przeglądarce | przy każdym wyświetleniu |
-| Pogoda, gleba, hydrologia | **nie podłączone** – dla działek spoza demo raport pokazuje „Brak danych” | – |
+| Pogoda – Open-Meteo / NASA POWER | tak, przy analizie działki; zakresy starsze niż 10 dni z bufora | zakres dat i ostatni pełny dzień |
+| Gleba – ISRIC SoilGrids 2.0 | tak, przy analizie działki, potem z bufora | data pobrania; mapa modelowa (wersja 2.0) |
+| Cieki i rowy – OpenStreetMap (Overpass) | tak, przy analizie działki | data pobrania; gdy serwer nie odpowie – „Brak danych” |
 
 Spływ, zastoiska, nachylenie, obszar do sprawdzenia i NDMI **liczy aplikacja** z pobranych danych (pkt 4.2 opisu zadania).
-Ocena niedoboru wody na dzień analizy wymaga jeszcze danych pogodowych i glebowych.
+Ocenę niedoboru wody, historię i zalecenia aplikacja liczy z pogody, gleby i hydrologii (sekcja „Ocena wody dla dowolnej działki”).
 
 ## Biblioteki, usługi i licencje
 
@@ -250,6 +276,10 @@ Ocena niedoboru wody na dzień analizy wymaga jeszcze danych pogodowych i glebow
 | ULDK (GUGiK) – `uldk.gugik.gov.pl` | granice działek | dane PZGiK udostępniane nieodpłatnie; warunki: [opis usługi](https://uldk.gugik.gov.pl/opis.html) |
 | NMT – Geoportal WCS (GUGiK) | model terenu | dane PZGiK udostępniane nieodpłatnie; warunki: [geoportal.gov.pl](https://www.geoportal.gov.pl) |
 | Sentinel-2 L2A (Copernicus, ESA) przez Earth Search (Element 84) i AWS Open Data | NDMI | Copernicus – wolny i otwarty dostęp, wymagane przypisanie „Contains modified Copernicus Sentinel data [rok]” |
+| Open-Meteo (Archive, Forecast) | pogoda | dane CC BY 4.0; darmowe API tylko do użytku niekomercyjnego, dzienny limit zapytań |
+| NASA POWER (LaRC) | pogoda zapasowa | dane publiczne NASA, wymagane przypisanie źródła |
+| ISRIC SoilGrids 2.0 | gleba | CC BY 4.0 |
+| OpenStreetMap przez Overpass API | cieki i rowy | ODbL; publiczne serwery Overpass mają limity i bywają przeciążone |
 
 Odwzorowania kartograficzne, czytnik GeoTIFF, algorytmy hydrologiczne i renderer 3D są napisane w tym repozytorium
 (bez proj4, GDAL, GRASS ani three.js).
@@ -259,14 +289,17 @@ Aplikacja nie korzysta z modeli AI w czasie działania – wszystkie wyniki licz
 
 ## Znane ograniczenia
 
-- Ocena niedoboru wody i zalecenia agrotechniczne działają tylko dla trzech przykładów demonstracyjnych.
-- Pogoda, gleba i hydrologia nie są podłączone; warstwa erozji pokazuje więc samo nachylenie.
+- Ocena wody to model: start 1 marca z pełnym zapasem, typowy kalendarz uprawy, pogoda z siatki reanalizy (ok. 10–50 km), bez podsiąku wód gruntowych i bez nawadniania wykonanego przez rolnika.
+- SoilGrids to mapa modelowa 250 m – na konkretnym polu gleba może się różnić; docelowo mapy glebowo-rolnicze IUNG-PIB.
+- Cieki pochodzą z OpenStreetMap (niekompletne dla małych rowów). MPHP Wód Polskich wymaga autoryzacji, więc nie jest używana.
+- Open-Meteo ma dzienny limit zapytań z jednego adresu – wtedy działa NASA POWER (opóźnienie danych kilka dni, uzupełniane prognozą Open-Meteo).
+- Warstwa erozji pokazuje samo nachylenie (bez opadu i pokrycia).
 - Analiza topografii nie uwzględnia opadu, infiltracji, drenażu, przepustów ani rowów pod drogami. Nie liczymy głębokości zalania.
 - D8 prowadzi wodę do jednego sąsiada – rozpraszanie spływu na stokach jest pominięte (inaczej niż MFD w `r.watershed`).
 - Pobrany raster obejmuje działkę z otoczeniem; gdy obszar dopływu wychodzi poza niego, raport to podaje.
 - NMT: czas odpowiedzi usługi WCS bywa długi (dziesiątki sekund); limit oczekiwania 120 s (`KROPLA_NMT_TIMEOUT_MS`).
 - NDMI ma rozdzielczość 20 m; przy małych działkach piksele graniczne mieszają sygnał z sąsiednich pól.
-- Nawadnianie: tylko miejsce w modelu raportu, bez dawek i terminów.
+- Nawadnianie: dawka orientacyjna z bilansu (do 30 mm), bez terminów i bez sprawdzania dostępu do wody.
 - Mapa Leaflet wymaga internetu (kafelki OSM). Bez nich działa stan awaryjny.
 
 ## Weryfikacja wyników

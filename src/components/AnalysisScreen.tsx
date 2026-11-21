@@ -218,7 +218,11 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
             </div>
 
             <div className="form-status" role="status" aria-live="polite">
-              {isLoading && <p className="status status--loading">Analizuję dane dla działki…</p>}
+              {isLoading && (
+                <p className="status status--loading">
+                  Pobieram dane działki: granicę, pogodę z 10 lat, glebę i cieki w pobliżu. Może to potrwać do 30 sekund.
+                </p>
+              )}
               {unavailable && (
                 <p className="status status--info">
                   Nie ma analizy dla tego zestawu danych. Dane formularza zostały zachowane – możesz je poprawić albo

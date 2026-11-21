@@ -1,6 +1,7 @@
 /**
  * Klient API terenu i NDMI. Wyniki zapamiętujemy w pamięci strony – ponowne otwarcie widoku nie pobiera ich drugi raz.
  */
+import type { AnalysisOutcome, AnalysisRequest } from '../types/analysis';
 import type { NdmiResponse, ParcelLookup, TerrainResponse } from '../types/terrain';
 
 const memory = new Map<string, Promise<unknown>>();
@@ -55,4 +56,12 @@ export function fetchNdmi(parcelId: string, date: string): Promise<NdmiResponse>
   return cached(`ndmi:${parcelId}:${date}`, () =>
     getJson<NdmiResponse>(`/api/ndmi?id=${encodeURIComponent(parcelId)}&date=${date}`, 180000),
   );
+}
+
+export type AnalysisResponse = AnalysisOutcome | { status: 'error'; message: string; stage: string };
+
+/** Ocena sytuacji wodnej z serwera (pogoda, gleba, hydrologia). Nie zapamiętujemy – dane z ostatnich dni się zmieniają. */
+export function fetchAnalysis(request: AnalysisRequest): Promise<AnalysisResponse> {
+  const params = new URLSearchParams({ id: request.parcelId, crop: request.cropId, date: request.analysisDate });
+  return getJson<AnalysisResponse>(`/api/analysis?${params.toString()}`, 90000);
 }

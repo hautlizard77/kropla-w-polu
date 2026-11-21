@@ -12,7 +12,7 @@ import { DEMO_SCENARIOS, type DemoScenario } from '../data/demoScenarios';
 import { compareIsoDates, formatDatePl } from '../lib/dates';
 import type { AnalysisOutcome, AnalysisRequest, AnalysisResult, DataSource } from '../types/analysis';
 import type { ParcelInfo } from '../types/terrain';
-import { ApiUnavailableError, fetchParcel } from './terrain';
+import { ApiUnavailableError, fetchAnalysis } from './terrain';
 
 /** Błąd techniczny (np. brak połączenia) – w odróżnieniu od braku analizy dla danych wejściowych. */
 export class AnalysisError extends Error {
@@ -31,33 +31,33 @@ export interface AnalyzeOptions {
 const DEMO_DELAY_MS = 700;
 
 export async function analyzeParcel(request: AnalysisRequest, options: AnalyzeOptions = {}): Promise<AnalysisOutcome> {
-  await delay(DEMO_DELAY_MS, options.signal);
-
   if (options.simulateError) {
+    await delay(DEMO_DELAY_MS, options.signal);
     throw new AnalysisError('Nie udało się połączyć z usługą analizy. Sprawdź połączenie z internetem i spróbuj ponownie.');
   }
 
   // Punkt podłączenia przyszłego API: zamień poniższe wywołania na `fetchAnalysisFromApi(request, options.signal)`.
   const isDemoParcel = DEMO_SCENARIOS.some((scenario) => scenario.request.parcelId === request.parcelId);
-  if (isDemoParcel) return analyzeWithDemoScenarios(request);
+  if (isDemoParcel) {
+    await delay(DEMO_DELAY_MS, options.signal);
+    return analyzeWithDemoScenarios(request);
+  }
   return analyzeObservedParcel(request);
 }
 
-/** Działka spoza trybu demo: granica z ULDK i uczciwy stan danych. */
-async function analyzeObservedParcel(request: AnalysisRequest, now: Date = new Date()): Promise<AnalysisOutcome> {
-  let lookup;
+/** Działka spoza trybu demo: ocena serwera z danych pogodowych, glebowych i hydrologicznych. */
+async function analyzeObservedParcel(request: AnalysisRequest): Promise<AnalysisOutcome> {
+  let response;
   try {
-    lookup = await fetchParcel(request.parcelId);
+    response = await fetchAnalysis(request);
   } catch (error) {
     throw new AnalysisError(error instanceof ApiUnavailableError ? error.message : 'Nie udało się pobrać danych działki.');
   }
-  if (lookup.status === 'not_found') {
-    return { status: 'unavailable', unavailable: { reason: 'unknown_parcel', message: lookup.message, hint: null } };
-  }
-  if (lookup.status === 'error') throw new AnalysisError(lookup.message);
-  return { status: 'ok', result: observedResult(request, lookup.parcel, now) };
+  if (response.status === 'error') throw new AnalysisError(response.message);
+  return response;
 }
 
+/** Wynik zastępczy bez oceny – tylko granica działki i stan źródeł (używany w testach i przy braku serwera analiz). */
 export function observedResult(request: AnalysisRequest, parcel: ParcelInfo, now: Date = new Date()): AnalysisResult {
   const ring = [...parcel.ringWgs84, parcel.ringWgs84[0] as [number, number]];
   const onDemand = (kind: DataSource['kind'], id: string, name: string, provider: string, url: string, details: string): DataSource => ({

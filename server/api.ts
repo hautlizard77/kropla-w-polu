@@ -4,6 +4,7 @@
  *   GET /api/parcel?id=<identyfikator działki>
  *   GET /api/terrain?id=<identyfikator działki>
  *   GET /api/ndmi?id=<identyfikator działki>&date=<RRRR-MM-DD>
+ *   GET /api/analysis?id=<identyfikator działki>&crop=<uprawa>&date=<RRRR-MM-DD>
  *
  * Działa jako wtyczka serwera Vite (npm run dev / npm run preview) oraz w serwerze produkcyjnym (npm start).
  */
@@ -16,6 +17,12 @@ import { fetchNmt } from './sources/nmt';
 import { NDMI_VERSION, computeNdmi } from './sources/sentinel';
 import { errorText, lookupParcel } from './sources/uldk';
 import { TERRAIN_VERSION, computeTerrain } from './terrain/analysis';
+import { isCropId } from '../src/data/crops';
+import type { AnalysisOutcome } from '../src/types/analysis';
+import { ASSESS_VERSION, buildAssessment } from './analysis/assess';
+import { getWaterways } from './sources/hydro';
+import { getSoil } from './sources/soil';
+import { addDays, getWeather } from './sources/weather';
 import { demoDem, demoNdmi } from './terrain/demo';
 
 const PARCEL_ID = /^\d{6}_\d\.\d{4}(\.AR_\d+)?\.\d+[A-Za-z]?(\/\d+[A-Za-z]?)?$/;
@@ -32,7 +39,7 @@ export function createApiHandler() {
       if (req.method !== 'GET') return send(req, res, 405, { status: 'error', message: 'Dozwolone tylko zapytania GET.' });
       if (path === '/health') return send(req, res, 200, { status: 'ok', time: new Date().toISOString() });
       const id = (url.searchParams.get('id') ?? '').trim();
-      if (path === '/parcel' || path === '/terrain' || path === '/ndmi') {
+      if (path === '/parcel' || path === '/terrain' || path === '/ndmi' || path === '/analysis') {
         if (!PARCEL_ID.test(id)) return send(req, res, 400, { status: 'error', message: 'Nieprawidłowy identyfikator działki.', stage: 'input' });
       }
       if (path === '/parcel') return send(req, res, 200, await lookupParcel(id));
@@ -41,6 +48,12 @@ export function createApiHandler() {
         const date = url.searchParams.get('date') ?? '';
         if (!DATE.test(date)) return send(req, res, 400, { status: 'error', message: 'Nieprawidłowa data analizy.', stage: 'input' });
         return send(req, res, 200, await ndmi(id, date));
+      }
+      if (path === '/analysis') {
+        const date = url.searchParams.get('date') ?? '';
+        const crop = url.searchParams.get('crop') ?? '';
+        if (!DATE.test(date) || !isCropId(crop)) return send(req, res, 400, { status: 'error', message: 'Nieprawidłowa data lub uprawa.', stage: 'input' });
+        return send(req, res, 200, await analysis(id, crop, date));
       }
       if (next) return next();
       return send(req, res, 404, { status: 'error', message: 'Nie ma takiego zasobu API.' });
@@ -136,5 +149,48 @@ export async function ndmi(parcelId: string, date: string): Promise<NdmiResponse
     } catch (error) {
       return { status: 'error', message: `Nie udało się pobrać obserwacji Sentinel-2 (${errorText(error)}).`, stage: 'sentinel' };
     }
+  });
+}
+
+function todayWarsaw(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Warsaw', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+
+/** Ocena sytuacji wodnej dowolnej działki z danych pogodowych, glebowych i hydrologicznych. */
+export async function analysis(parcelId: string, cropId: string, date: string): Promise<AnalysisOutcome | { status: 'error'; message: string; stage: string }> {
+  if (!isCropId(cropId)) return { status: 'error', message: 'Nieznana uprawa.', stage: 'input' };
+  const today = todayWarsaw();
+  if (date > today) return { status: 'error', message: 'Data analizy nie może być z przyszłości.', stage: 'input' };
+  const key = `v${ASSESS_VERSION}:${parcelId}:${cropId}:${date}`;
+  const cacheable = date <= addDays(today, -10);
+  if (cacheable) {
+    const cached = await cacheGet<AnalysisOutcome>('analysis', key);
+    if (cached) return cached;
+  }
+  return once(`analysis:${key}`, async () => {
+    const lookup = await lookupParcel(parcelId);
+    if (lookup.status === 'not_found') {
+      return { status: 'unavailable', unavailable: { reason: 'unknown_parcel', message: lookup.message, hint: null } } as AnalysisOutcome;
+    }
+    if (lookup.status === 'error') return { status: 'error', message: lookup.message, stage: 'uldk' };
+    const parcel = lookup.parcel;
+    const lat = parcel.ringWgs84.reduce((s, p) => s + p[1], 0) / parcel.ringWgs84.length;
+    const lon = parcel.ringWgs84.reduce((s, p) => s + p[0], 0) / parcel.ringWgs84.length;
+    const start = `${Number(date.slice(0, 4)) - 10}-03-01`;
+    const [weather, soil, hydro] = await Promise.allSettled([
+      getWeather(lat, lon, start, date, today),
+      getSoil(lat, lon),
+      getWaterways(parcel.id, parcel.ringWgs84, parcel.ring2180),
+    ]);
+    const result = buildAssessment({
+      request: { parcelId: parcel.id, cropId, analysisDate: date },
+      parcel,
+      weather: weather.status === 'fulfilled' ? weather.value : null,
+      soil: soil.status === 'fulfilled' ? soil.value : null,
+      hydro: hydro.status === 'fulfilled' ? hydro.value : null,
+    });
+    const outcome: AnalysisOutcome = { status: 'ok', result };
+    if (cacheable && result.currentState.level !== 'insufficient_data') await cacheSet('analysis', key, outcome);
+    return outcome;
   });
 }

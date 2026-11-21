@@ -1,0 +1,148 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import type { ParcelInfo } from '../../src/types/terrain';
+import type { SoilProfile } from '../sources/soil';
+import { saxtonRawls } from '../sources/soil';
+import { addDays, dateRange, et0PenmanMonteith, type WeatherSeries } from '../sources/weather';
+import { buildAssessment, classify, seasonStart } from './assess';
+import { cropDay } from './cropParams';
+import { classifyDepletion, readilyAvailableWater, runDepletion, stressCoefficient, totalAvailableWater } from './waterBalance';
+
+const uniformSoil = [{ topCm: 0, bottomCm: 150, thetaFc: 0.25, thetaWp: 0.13 }];
+
+test('przykład kontrolny: ziemniak (Zr 0,5 m, p 0,35) TAW 60 / RAW 21, kukurydza (Zr 1,2 m, p 0,55) TAW 144 / RAW 79,2', () => {
+  assert.equal(totalAvailableWater(uniformSoil, 0.5).tawMm, 60);
+  assert.equal(readilyAvailableWater(60, 0.35), 21);
+  assert.equal(totalAvailableWater(uniformSoil, 1.2).tawMm, 144);
+  assert.equal(readilyAvailableWater(144, 0.55), 79.2);
+  // Przy Dr 45 mm wynik względem progu jest różny.
+  assert.equal(classifyDepletion(45, 21), 'stress');
+  assert.equal(classifyDepletion(45, 79.2), 'no_stress');
+  assert.ok(stressCoefficient(45, 60, 21) < 1);
+  assert.equal(stressCoefficient(45, 144, 79.2), 1);
+});
+
+test('profil warstwowy: wkłady warstw w zasięgu korzeni, warstwa przecięta proporcjonalnie', () => {
+  const r = totalAvailableWater(
+    [
+      { topCm: 0, bottomCm: 30, thetaFc: 0.3, thetaWp: 0.15 },
+      { topCm: 30, bottomCm: 100, thetaFc: 0.2, thetaWp: 0.1 },
+    ],
+    0.6,
+  );
+  assert.equal(r.tawMm, 75);
+  assert.equal(totalAvailableWater([{ topCm: 0, bottomCm: 40, thetaFc: 0.25, thetaWp: 0.13 }], 1).tawMm, null);
+});
+
+test('bilans dzienny zatrzymuje się na braku danych zamiast zakładać zero', () => {
+  const run = runDepletion({
+    initialDepletionMm: 10,
+    tawMm: 60,
+    kcForDate: () => 1,
+    days: [
+      { date: '2024-06-01', precipitationMm: 0, et0Mm: 5 },
+      { date: '2024-06-02', precipitationMm: null, et0Mm: 4 },
+      { date: '2024-06-03', precipitationMm: 0, et0Mm: 6 },
+    ],
+  });
+  assert.equal(run.finalDrMm, 15);
+  assert.deepEqual(run.missingDates, ['2024-06-02']);
+});
+
+test('ET0 Penman–Monteith: przykład FAO-56 nr 18 (Bruksela, 6 lipca) ≈ 3,9 mm', () => {
+  const et0 = et0PenmanMonteith({ date: '2023-07-06', latDeg: 50.8, tMax: 21.5, tMin: 12.3, tMean: 16.9, rhMean: 73.5, wind2m: 2.078, rsMj: 22.07, elevationM: 100 });
+  assert.ok(et0 !== null && Math.abs(et0 - 3.9) < 0.25, `ET0 = ${et0}`);
+});
+
+test('Saxton i Rawls: glina (40% piasku, 20% iłu, 2,5% materii org.) ≈ θFC 0,28, θWP 0,12', () => {
+  const { thetaFc, thetaWp } = saxtonRawls(40, 20, 2.5);
+  assert.ok(Math.abs(thetaFc - 0.28) < 0.015, `θFC ${thetaFc}`);
+  assert.ok(Math.abs(thetaWp - 0.12) < 0.02, `θWP ${thetaWp}`);
+  const sand = saxtonRawls(90, 3, 1);
+  assert.ok(sand.thetaFc - sand.thetaWp < 0.1, 'piasek ma małą retencję');
+});
+
+test('kalendarz uprawy: pszenica ozima w czerwcu w pełni rozwoju, w grudniu poza sezonem', () => {
+  assert.equal(cropDay('pszenica_ozima', '2024-06-10').stage, 'srodkowa');
+  assert.equal(cropDay('pszenica_ozima', '2024-12-10').inSeason, false);
+  assert.equal(seasonStart('2024-02-10'), '2023-03-01');
+  assert.equal(classify(10, 100, 50), 'low');
+  assert.equal(classify(60, 100, 50), 'moderate');
+  assert.equal(classify(90, 100, 50), 'elevated');
+});
+
+function syntheticWeather(start: string, end: string, f: (date: string) => [number, number]): WeatherSeries {
+  const days = dateRange(start, end).map((date) => {
+    const [p, e] = f(date);
+    return { date, precipitationMm: p, et0Mm: e, source: 'nasa-power' as const };
+  });
+  return {
+    days,
+    lastCompleteDate: end,
+    notes: [],
+    sources: [{ name: 'test', provider: 'test', url: null, origin: 'observed', retrievedAt: null, observationDate: null, resolutionM: null, durationMs: null, notes: [] }],
+  };
+}
+
+const soil = (fc: number, wp: number, category: SoilProfile['category']): SoilProfile => ({
+  horizons: [{ topCm: 0, bottomCm: 200, thetaFc: fc, thetaWp: wp, sandPct: 85, clayPct: 5, organicMatterPct: 1 }],
+  topsoilTexture: 'piasek gliniasty',
+  category,
+  missing: [],
+  source: { name: 'gleba', provider: 'test', url: null, origin: 'observed', retrievedAt: null, observationDate: null, resolutionM: 250, durationMs: null, notes: [] },
+});
+
+const parcel = {
+  id: '040706_4.0001.9',
+  ring2180: [[0, 0], [100, 0], [100, 100]],
+  ringWgs84: [[18.31, 52.68], [18.311, 52.68], [18.311, 52.681]],
+  areaHa: 1,
+  voivodeship: 'kujawsko-pomorskie',
+  county: null,
+  commune: null,
+  region: null,
+  origin: 'observed',
+  source: { name: 'ULDK', provider: 'GUGiK', url: null, origin: 'observed', retrievedAt: '2026-11-21T10:00:00Z', observationDate: null, resolutionM: null, durationMs: 100, notes: [] },
+} as unknown as ParcelInfo;
+
+test('susza na glebie lekkiej: podwyższone ryzyko, podatność, zalecenia wynikające z oceny', () => {
+  // Każdego lata 1 mm opadu i 5 mm ET0 dziennie; poza latem wilgotno.
+  const weather = syntheticWeather('2014-03-01', '2024-07-01', (d) => (d.slice(5, 7) >= '05' && d.slice(5, 7) <= '08' ? [1, 5] : [3, 1]));
+  const result = buildAssessment({
+    request: { parcelId: parcel.id, cropId: 'pszenica_ozima', analysisDate: '2024-07-01' },
+    parcel,
+    weather,
+    soil: soil(0.14, 0.05, 'lekka'),
+    hydro: null,
+    now: new Date('2026-11-21T12:00:00Z'),
+  });
+  assert.equal(result.isDemo, false);
+  assert.equal(result.currentState.level, 'elevated');
+  assert.equal(result.historicalVulnerability.level, 'elevated');
+  assert.ok(result.historicalVulnerability.criticalMonths.includes(6));
+  assert.ok(result.recommendations.some((r) => r.id === 'rec-prochnica'));
+  assert.ok(result.recommendations.some((r) => r.id === 'rec-wilgoc'));
+  assert.equal(result.irrigation?.status === 'calculated' && result.irrigation.justified, true);
+});
+
+test('dane po dacie analizy nie wpływają na ocenę', () => {
+  const dry = (d: string): [number, number] => (d.slice(5, 7) >= '05' && d.slice(5, 7) <= '08' ? [1, 5] : [3, 1]);
+  const base = syntheticWeather('2014-03-01', '2024-06-15', dry);
+  // Ta sama seria z dodatkowymi, bardzo mokrymi dniami po dacie analizy.
+  const extended = syntheticWeather('2014-03-01', '2024-07-15', (d) => (d > '2024-06-15' ? [50, 1] : dry(d)));
+  const req = { parcelId: parcel.id, cropId: 'kukurydza_ziarno' as const, analysisDate: '2024-06-15' };
+  const a = buildAssessment({ request: req, parcel, weather: base, soil: soil(0.25, 0.12, 'średnia'), hydro: null });
+  const b = buildAssessment({ request: req, parcel, weather: extended, soil: soil(0.25, 0.12, 'średnia'), hydro: null });
+  assert.equal(a.currentState.level, b.currentState.level);
+  assert.equal(a.currentState.indicators[0]?.value, b.currentState.indicators[0]?.value);
+});
+
+test('brak danych o glebie: „Za mało danych”, bez zaleceń, ale ze wskaźnikami pogodowymi', () => {
+  const weather = syntheticWeather('2014-03-01', '2024-07-01', () => [2, 2]);
+  const result = buildAssessment({ request: { parcelId: parcel.id, cropId: 'ziemniaki', analysisDate: '2024-07-01' }, parcel, weather, soil: null, hydro: null });
+  assert.equal(result.currentState.level, 'insufficient_data');
+  assert.equal(result.recommendations.length, 0);
+  assert.ok(result.currentState.indicators.some((i) => i.id === 'opad30'));
+  assert.equal(result.dataSources.find((s) => s.kind === 'gleba')?.availability, 'missing');
+  assert.equal(addDays('2024-03-01', -1), '2024-02-29');
+});

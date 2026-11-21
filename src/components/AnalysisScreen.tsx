@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { cropLabel } from '../data/crops';
 import { CropOptions } from './CropOptions';
-import { DEMO_PARCELS, DEMO_SCENARIOS, type DemoScenario } from '../data/demoScenarios';
+import { DEMO_PARCELS, type DemoScenario } from '../data/demoScenarios';
 import { earliestAnalysisDate, formatDatePl, todayInPoland } from '../lib/dates';
 import { normalizeParcelId, validateForm, type FieldErrors, type FormValues } from '../lib/validation';
 import { AnalysisError, analyzeParcel } from '../services/analysis';
@@ -96,12 +96,6 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
     void run(validation.request);
   }
 
-  function tryExample(scenario: DemoScenario) {
-    setErrors({});
-    onValuesChange({ ...scenario.request });
-    void run(scenario.request);
-  }
-
   function applyScenarioInputs(scenario: DemoScenario) {
     setErrors({});
     setStatus({ kind: 'idle' });
@@ -121,7 +115,6 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
     return undefined;
   };
   const isLoading = status.kind === 'loading';
-  const firstExample = DEMO_SCENARIOS[0] as DemoScenario;
 
   return (
     <div className="analysis">
@@ -208,9 +201,6 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
             <div className="form-actions">
               <button type="submit" className="btn btn--primary" disabled={isLoading}>
                 {isLoading ? 'Sprawdzam…' : 'Sprawdź sytuację wodną'}
-              </button>
-              <button type="button" className="btn btn--secondary" onClick={() => tryExample(firstExample)} disabled={isLoading}>
-                Wypróbuj przykład
               </button>
             </div>
 

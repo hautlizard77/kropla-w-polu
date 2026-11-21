@@ -72,7 +72,7 @@ widać przy dzwonku i w menu. Dodane działki, przeczytane powiadomienia i ustaw
   - Działkę można wpisać ręcznie albo kliknąć na mapie lub na liście przykładowych działek. Wybór aktualizuje formularz i zaznaczenie.
   - Domyślna data to dzisiejszy dzień w Polsce (`Europe/Warsaw`). Można wybrać dowolny dzień z ostatnich 10 lat.
     Datę przechowujemy jako napis `YYYY-MM-DD`, bez obiektu `Date`, więc strefa czasowa jej nie przesunie.
-  - „Sprawdź sytuację wodną” uruchamia analizę, a „Wypróbuj przykład” wypełnia formularz i otwiera raport demo.
+  - „Sprawdź sytuację wodną” uruchamia analizę i otwiera raport.
   - Obsłużone stany: brak wymaganych pól, zły format identyfikatora, data spoza zakresu, ładowanie, błąd techniczny
     i brak analizy dla podanego zestawu danych. Komunikat pojawia się obok właściwego pola, a dane formularza zostają.
   - Stan awaryjny mapy: gdy nie wczyta się biblioteka mapy, aplikacja pokazuje komunikat, listę działek i szkic.

@@ -167,7 +167,13 @@ export function computeTerrain(input: TerrainInput): Omit<TerrainResult, 'cached
   const depressionDisplay = aggregateMax(depressionMaskAnalysis, grid, factor);
   const elevation: (number | null)[] = Array.from(display.values, (v) => (Number.isNaN(v) ? null : round(v, 2)));
   const finite = elevation.filter((v): v is number => v !== null);
-  const elevationRange: [number, number] = finite.length > 0 ? [Math.min(...finite), Math.max(...finite)] : [0, 0];
+  let minE = Infinity;
+  let maxE = -Infinity;
+  for (const v of finite) {
+    if (v < minE) minE = v;
+    if (v > maxE) maxE = v;
+  }
+  const elevationRange: [number, number] = finite.length > 0 ? [minE, maxE] : [0, 0];
 
   const retentionCandidate = chooseRetention(
     keptDepressions,
@@ -335,7 +341,8 @@ function traceChannels(
       accumulationM2: keep.map((k) => Math.round(acc[k] as number)),
     });
   }
-  lines.sort((a, b) => Math.max(...b.accumulationM2) - Math.max(...a.accumulationM2));
+  const peak = (values: number[]) => values.reduce((m, v) => (v > m ? v : m), -Infinity);
+  lines.sort((a, b) => peak(b.accumulationM2) - peak(a.accumulationM2));
   return lines.slice(0, 1500);
 }
 

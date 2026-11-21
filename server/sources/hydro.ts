@@ -45,7 +45,8 @@ export async function getWaterways(parcelId: string, ringWgs84: Xy[], ring2180: 
   const started = Date.now();
   const lat = ringWgs84.reduce((s, p) => s + p[1], 0) / ringWgs84.length;
   const lon = ringWgs84.reduce((s, p) => s + p[0], 0) / ringWgs84.length;
-  const parcelRadius = Math.max(...ring2180.map((p) => Math.hypot(p[0] - ring2180[0]![0], p[1] - ring2180[0]![1])));
+  let parcelRadius = 0;
+  for (const p of ring2180) parcelRadius = Math.max(parcelRadius, Math.hypot(p[0] - ring2180[0]![0], p[1] - ring2180[0]![1]));
   const around = Math.round(parcelRadius + radiusM);
   const query = `[out:json][timeout:5];way["waterway"~"^(river|stream|canal|ditch|drain)$"](around:${around},${lat},${lon});out geom tags;`;
   const recentFailure = failures.get(key);

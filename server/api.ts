@@ -62,9 +62,23 @@ export function createApiHandler() {
       if (next) return next();
       return send(req, res, 404, { status: 'error', message: 'Nie ma takiego zasobu API.' });
     } catch (error) {
-      return send(req, res, 500, { status: 'error', message: errorText(error), stage: 'server' });
+      // Pełna ścieżka błędu w terminalu, a w komunikacie – funkcja, w której wystąpił (do zgłoszenia problemu).
+      console.error(`[api] ${path} ${url.search} – błąd serwera:`, error);
+      return send(req, res, 500, { status: 'error', message: `${errorText(error)}${whereThrown(error)}`, stage: 'server' });
     }
   };
+}
+
+/** „ (w: getForecast → fetchMetNoForecast)” – pierwsze funkcje aplikacji ze stosu wywołań. */
+function whereThrown(error: unknown): string {
+  if (!(error instanceof Error) || !error.stack) return '';
+  const names = error.stack
+    .split('\n')
+    .slice(1)
+    .map((line) => /at (?:async )?([\w.$<>]+) \(/.exec(line)?.[1])
+    .filter((name): name is string => Boolean(name) && !/^(Array|Object|JSON|Promise|Math|process|new|Module)\b/.test(name!))
+    .slice(0, 3);
+  return names.length > 0 ? ` (w: ${names.join(' ← ')})` : '';
 }
 
 function send(req: IncomingMessage, res: ServerResponse, code: number, body: unknown): void {

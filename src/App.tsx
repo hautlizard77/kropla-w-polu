@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AnalysisScreen } from './components/AnalysisScreen';
+import { Breadcrumbs, SiteFooter, SiteHeader } from './components/Layout';
 import { ReportScreen } from './components/ReportScreen';
 import { todayInPoland } from './lib/dates';
 import { ANALYSIS_HASH, parseHash, reportHash, type Route } from './lib/route';
@@ -22,6 +23,8 @@ export function App() {
 
   useEffect(() => {
     const onHashChange = () => {
+      // Kotwice w obrębie strony (np. #o-prototypie) nie zmieniają widoku.
+      if (!window.location.hash.startsWith('#/') && window.location.hash !== '') return;
       const next = parseHash(window.location.hash);
       setRoute(next);
       if (next.name === 'report' && next.request) setFormValues(toFormValues(next.request));
@@ -46,58 +49,40 @@ export function App() {
       <a className="skip-link" href="#tresc">
         Przejdź do treści
       </a>
-      <header className="site-header no-print">
-        <div className="container site-header__inner">
-          <a className="brand" href={ANALYSIS_HASH} aria-label="Woda na polu – strona główna">
-            <svg className="brand__icon" viewBox="0 0 32 32" aria-hidden="true">
-              <path d="M16 4c4.5 6 7.5 10 7.5 14a7.5 7.5 0 0 1-15 0C8.5 14 11.5 10 16 4z" fill="currentColor" />
-              <path d="M5 28h22" stroke="var(--green-700)" strokeWidth="2.5" strokeLinecap="round" />
-            </svg>
-            <span>Woda na polu</span>
-          </a>
-          <nav aria-label="Główna nawigacja">
-            <ul className="nav-list">
-              <li>
-                <a href={ANALYSIS_HASH} aria-current={route.name === 'analysis' ? 'page' : undefined}>
-                  Analiza działki
-                </a>
-              </li>
-              {route.name === 'report' && (
-                <li>
-                  <a href={window.location.hash} aria-current="page">
-                    Raport
-                  </a>
-                </li>
-              )}
-            </ul>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader current={route.name} />
 
-      <main id="tresc" className="container main" tabIndex={-1}>
-        {route.name === 'analysis' ? (
-          <AnalysisScreen
-            values={formValues}
-            onValuesChange={setFormValues}
-            onResult={openReport}
-            simulateError={SIMULATE_ERROR}
+      <main id="tresc" className="main" tabIndex={-1}>
+        <div className="container">
+          <Breadcrumbs
+            items={
+              route.name === 'analysis'
+                ? [{ label: 'Woda na polu', href: ANALYSIS_HASH }, { label: 'Analiza działki' }]
+                : [
+                    { label: 'Woda na polu', href: ANALYSIS_HASH },
+                    { label: 'Analiza działki', href: ANALYSIS_HASH },
+                    { label: 'Raport' },
+                  ]
+            }
           />
-        ) : (
-          <ReportScreen
-            request={route.request}
-            cachedResult={lastResult}
-            onChangeParcel={goToAnalysis}
-            simulateError={SIMULATE_ERROR}
-          />
-        )}
+          {route.name === 'analysis' ? (
+            <AnalysisScreen
+              values={formValues}
+              onValuesChange={setFormValues}
+              onResult={openReport}
+              simulateError={SIMULATE_ERROR}
+            />
+          ) : (
+            <ReportScreen
+              request={route.request}
+              cachedResult={lastResult}
+              onChangeParcel={goToAnalysis}
+              simulateError={SIMULATE_ERROR}
+            />
+          )}
+        </div>
       </main>
 
-      <footer className="site-footer no-print">
-        <div className="container">
-          Prototyp na HackNation 2026 · wyzwanie KOWR „Zatrzymaj wodę, chroń plony”. Wersja demonstracyjna – wyniki
-          dostępne tylko dla oznaczonych przykładów.
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

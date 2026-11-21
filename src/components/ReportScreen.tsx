@@ -13,6 +13,7 @@ import type {
   Indicator,
   Recommendation,
 } from '../types/analysis';
+import { ImportantNotice, Steps } from './Layout';
 import { ParcelMap, type MapParcel } from './ParcelMap';
 import { RiskBadge } from './RiskBadge';
 import { SchematicMap } from './SchematicMap';
@@ -94,6 +95,7 @@ export function ReportScreen({ request, cachedResult, onChangeParcel, simulateEr
   if (state.kind !== 'ok') {
     return (
       <div className="report report--empty">
+        <Steps current={2} />
         <h1 ref={headingRef} tabIndex={-1}>
           {state.kind === 'loading' ? 'Przygotowuję raport…' : 'Raport sytuacji wodnej'}
         </h1>
@@ -171,15 +173,16 @@ function Report({
   return (
     <article className="report" aria-labelledby="tytul-raportu">
       <header className="report-header">
-        {result.isDemo && (
-          <p className="demo-banner">
-            <strong>Dane demonstracyjne.</strong> Wartości, granice działki i zalecenia są ilustracyjne – nie opisują
-            rzeczywistej działki.
-          </p>
-        )}
+        <Steps current={2} />
+        <p className="eyebrow">Raport sytuacji wodnej</p>
         <h1 id="tytul-raportu" ref={headingRef} tabIndex={-1}>
-          Raport sytuacji wodnej działki
+          Działka {parcel.id}
         </h1>
+        {result.isDemo && (
+          <ImportantNotice title="Dane demonstracyjne">
+            <p>Wartości, granice działki i zalecenia są ilustracyjne – nie opisują rzeczywistej działki.</p>
+          </ImportantNotice>
+        )}
         <RequestSummary request={request} />
         <p className="muted report-header__meta">
           {parcel.locationLabel} · gm. {parcel.commune}, pow. {parcel.county}, woj. {parcel.voivodeship}

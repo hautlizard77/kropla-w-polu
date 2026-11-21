@@ -5,6 +5,7 @@ import { earliestAnalysisDate, formatDatePl, todayInPoland } from '../lib/dates'
 import { normalizeParcelId, validateForm, type FieldErrors, type FormValues } from '../lib/validation';
 import { AnalysisError, analyzeParcel } from '../services/analysis';
 import type { AnalysisRequest, AnalysisResult, AnalysisUnavailable } from '../types/analysis';
+import { ImportantNotice, Steps } from './Layout';
 import { ParcelMap, type MapParcel } from './ParcelMap';
 
 interface Props {
@@ -117,6 +118,7 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
   return (
     <div className="analysis">
       <section className="intro" aria-labelledby="tytul-analizy">
+        <Steps current={1} />
         <h1 id="tytul-analizy" tabIndex={-1}>
           Sprawdź, czy Twojemu polu brakuje wody
         </h1>
@@ -124,6 +126,11 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
           Wskaż działkę, wybierz uprawę i dzień. Dowiesz się, czy na polu występuje niedobór wody, co go powoduje
           i jak możesz zatrzymać wodę na swojej ziemi.
         </p>
+        <ul className="intro__facts">
+          <li>Bez logowania i zakładania konta</li>
+          <li>Raport do wydruku lub zapisu w PDF</li>
+          <li>Wynik do omówienia z doradcą rolnym</li>
+        </ul>
       </section>
 
       <div className="analysis__grid">
@@ -248,12 +255,12 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
       </div>
 
       <section className="examples" aria-labelledby="tytul-przykladow">
-        <h2 id="tytul-przykladow">
-          Przykłady <span className="demo-tag">Dane demonstracyjne</span>
-        </h2>
-        <p className="muted">
-          W tej wersji analiza działa tylko dla trzech przykładów. Dane, granice działek i zalecenia są ilustracyjne.
-        </p>
+        <h2 id="tytul-przykladow">Przykłady</h2>
+        <ImportantNotice title="Dane demonstracyjne">
+          <p>
+            W tej wersji analiza działa tylko dla trzech przykładów. Dane, granice działek i zalecenia są ilustracyjne.
+          </p>
+        </ImportantNotice>
         <ul className="example-list">
           {DEMO_SCENARIOS.map((scenario) => (
             <li key={scenario.id} className="example">

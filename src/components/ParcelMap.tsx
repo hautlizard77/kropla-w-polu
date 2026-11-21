@@ -119,6 +119,7 @@ export function ParcelMap({ parcels, selectedId, onSelect, highlights = NO_HIGHL
       geometry.coordinates.map((ring) => ring.map(([lng, lat]) => L.latLng(lat, lng)));
 
     let selectedBounds: import('leaflet').LatLngBounds | null = null;
+    let allBounds: import('leaflet').LatLngBounds | null = null;
     for (const parcel of parcels) {
       const isSelected = parcel.id === selectedId;
       const polygon = L.polygon(toLatLngs(parcel.geometry), {
@@ -147,6 +148,7 @@ export function ParcelMap({ parcels, selectedId, onSelect, highlights = NO_HIGHL
       // Znacznik pomaga znaleźć małą działkę przy widoku całej Polski.
       marker?.addTo(layer);
       if (isSelected) selectedBounds = polygon.getBounds();
+      allBounds = allBounds ? allBounds.extend(polygon.getBounds()) : polygon.getBounds();
     }
 
     for (const highlight of highlights) {
@@ -162,6 +164,9 @@ export function ParcelMap({ parcels, selectedId, onSelect, highlights = NO_HIGHL
 
     if (selectedBounds) {
       map.fitBounds(selectedBounds, { padding: [24, 24], maxZoom: 16 });
+    } else if (allBounds) {
+      // Bez wybranej działki – widok obejmujący wszystkie działki z listy.
+      map.fitBounds(allBounds, { padding: [32, 32], maxZoom: 14 });
     } else {
       map.fitBounds(POLAND_BOUNDS);
     }

@@ -3387,6 +3387,13 @@ details > summary:hover {
   .balance__total { border-top: 2px solid var(--navy-900); }
 }
 
+/* Leaflet: przy ułamkowym powiększeniu między kafelkami podkładu widać jasne szczeliny – lekko powiększamy kafelki. */
+.leaflet-container .leaflet-tile {
+  outline: 1px solid transparent;
+  width: 256.5px !important;
+  height: 256.5px !important;
+}
+
 @media print {
   .forecast-step,
   .balance__total th,

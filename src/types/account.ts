@@ -21,6 +21,12 @@ export interface SavedParcel {
   name: string;
   cropId: CropId;
   addedOn: IsoDate;
+  /** Granica, położenie i powierzchnia z ULDK – pobierane po dodaniu działki i zapamiętywane. */
+  details?: Parcel;
+  /** Wynik wyszukania w ULDK, gdy działki nie znaleziono. */
+  lookup?: { status: 'not_found'; message: string };
+  /** Ostatni otwarty raport tej działki. */
+  lastAnalysis?: ParcelSummary['lastAnalysis'];
 }
 
 /** Podsumowanie działki do list i panelu głównego – przygotowane przez serwis, nie przez widok. */
@@ -28,6 +34,9 @@ export interface ParcelSummary {
   saved: SavedParcel;
   /** Geometria i położenie, jeśli są znane. */
   parcel: Parcel | null;
+  /** Stan pobierania granicy z ULDK. */
+  lookup: 'ok' | 'pending' | 'not_found';
+  lookupMessage: string | null;
   lastAnalysis: {
     request: AnalysisRequest;
     level: RiskLevel;

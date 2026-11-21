@@ -51,7 +51,7 @@ Konto, działki i powiadomienia są zdefiniowane w [`src/data/account.ts`](src/d
 
 | Zakładka | Adres | Co zawiera |
 |---|---|---|
-| Moje działki | `#/dzialki` | na start pusta lista; karty dodanych działek ze szkicem, położeniem, uprawą i oceną; dodawanie i usuwanie; „Nowa analiza” z wypełnionym formularzem |
+| Moje działki | `#/dzialki` | na start pusta lista; po dodaniu działki aplikacja pobiera z ULDK jej granicę, położenie (obręb, gmina, województwo) i powierzchnię i zapamiętuje je w przeglądarce; karta pokazuje szkic, uprawę i ostatni otwarty raport; działki są też na mapie w „Sprawdź działkę” |
 | Sprawdź działkę (strona główna) | `#/` (także `#/analiza`) | formularz i mapa (opis niżej) |
 | Raport | `#/raport?dzialka=…&uprawa=…&data=…` | raport sytuacji wodnej (opis niżej) |
 | Powiadomienia | `#/powiadomienia` | lista z filtrem „Wszystkie / Nieprzeczytane”, oznaczanie jako przeczytane, linki do raportów |

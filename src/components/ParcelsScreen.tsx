@@ -157,7 +157,11 @@ export function ParcelsScreen({ parcels, lockedIds, onAdd, onRemove, onAnalyze }
                 ) : (
                   <div className="parcel-card__placeholder">
                     <Icon name="pin" size={28} />
-                    <span>Brak geometrii działki</span>
+                    <span>
+                      {item.lookup === 'pending'
+                        ? 'Pobieram granicę działki z ewidencji (ULDK)…'
+                        : (item.lookupMessage ?? 'Nie znaleziono tej działki w ewidencji (ULDK) – sprawdź identyfikator.')}
+                    </span>
                   </div>
                 )}
               </div>
@@ -177,11 +181,11 @@ export function ParcelsScreen({ parcels, lockedIds, onAdd, onRemove, onAnalyze }
                   </div>
                   <div>
                     <dt>Położenie</dt>
-                    <dd>{item.parcel ? `${item.parcel.locationLabel}, woj. ${item.parcel.voivodeship}` : 'nieznane'}</dd>
+                    <dd>{item.parcel ? `${item.parcel.locationLabel}, gm. ${item.parcel.commune}, woj. ${item.parcel.voivodeship}` : item.lookup === 'pending' ? 'pobieram…' : 'nieznane'}</dd>
                   </div>
                   <div>
                     <dt>Powierzchnia</dt>
-                    <dd>{item.parcel?.areaHa != null ? `${item.parcel.areaHa.toLocaleString('pl-PL')} ha` : 'nieznana'}</dd>
+                    <dd>{item.parcel?.areaHa != null ? `${item.parcel.areaHa.toLocaleString('pl-PL')} ha` : item.lookup === 'pending' ? 'pobieram…' : 'nieznana'}</dd>
                   </div>
                   <div>
                     <dt>Uprawa</dt>

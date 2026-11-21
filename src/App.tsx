@@ -11,7 +11,8 @@ import { todayInPoland } from './lib/dates';
 import { HASH, parseHash, reportHash, type Route } from './lib/route';
 import { loadJson, saveJson } from './lib/storage';
 import type { FormValues } from './lib/validation';
-import { summarizeParcels, visibleNotifications } from './services/account';
+import { analysisSnapshot, parcelFromLookup, summarizeParcels, visibleNotifications } from './services/account';
+import { fetchParcel } from './services/terrain';
 import type { NotificationPreferences, SavedParcel } from './types/account';
 import type { AnalysisRequest, AnalysisResult } from './types/analysis';
 
@@ -40,6 +41,42 @@ export function App() {
   useEffect(() => saveJson('dodane-dzialki', addedParcels), [addedParcels]);
   useEffect(() => saveJson('przeczytane', readIds), [readIds]);
   useEffect(() => saveJson('preferencje', preferences), [preferences]);
+
+  // Działki bez granicy: pobieramy ją z ULDK (przez serwer aplikacji) i zapamiętujemy przy działce.
+  useEffect(() => {
+    const missing = addedParcels.filter((item) => !item.details && !item.lookup);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    for (const item of missing) {
+      fetchParcel(item.parcelId)
+        .then((lookup) => {
+          if (cancelled) return;
+          if (lookup.status === 'ok') {
+            const details = parcelFromLookup(lookup.parcel);
+            setAddedParcels((items) => items.map((p) => (p.parcelId === item.parcelId ? { ...p, details } : p)));
+          } else if (lookup.status === 'not_found') {
+            setAddedParcels((items) =>
+              items.map((p) => (p.parcelId === item.parcelId ? { ...p, lookup: { status: 'not_found', message: lookup.message } } : p)),
+            );
+          }
+          // Błąd usługi – spróbujemy przy następnym otwarciu aplikacji.
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [addedParcels]);
+
+  /** Otwarty raport zapisujemy jako „ostatnią analizę” działki, jeśli jest na liście. */
+  const rememberAnalysis = useCallback((result: AnalysisResult) => {
+    if (result.isDemo) return;
+    setAddedParcels((items) =>
+      items.some((p) => p.parcelId === result.request.parcelId)
+        ? items.map((p) => (p.parcelId === result.request.parcelId ? { ...p, lastAnalysis: analysisSnapshot(result) } : p))
+        : items,
+    );
+  }, []);
 
   const parcels = useMemo(() => summarizeParcels(addedParcels), [addedParcels]);
   const notifications = useMemo(() => visibleNotifications(INITIAL_NOTIFICATIONS, preferences), [preferences]);
@@ -110,6 +147,7 @@ export function App() {
           request={route.request}
           cachedResult={lastResult}
           onChangeParcel={goToAnalysis}
+          onLoaded={rememberAnalysis}
           simulateError={SIMULATE_ERROR}
         />
       );

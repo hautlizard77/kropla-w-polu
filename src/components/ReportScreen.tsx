@@ -48,6 +48,8 @@ interface Props {
   request: AnalysisRequest | null;
   cachedResult: AnalysisResult | null;
   onChangeParcel: () => void;
+  /** Wywoływane po wczytaniu raportu – aplikacja zapamiętuje ostatnią analizę działki. */
+  onLoaded?: (result: AnalysisResult) => void;
   simulateError: boolean;
 }
 
@@ -58,7 +60,7 @@ type State =
   | { kind: 'error'; message: string }
   | { kind: 'invalid' };
 
-export function ReportScreen({ request, cachedResult, onChangeParcel, simulateError }: Props) {
+export function ReportScreen({ request, cachedResult, onChangeParcel, onLoaded, simulateError }: Props) {
   const initial: State = !request
     ? { kind: 'invalid' }
     : cachedResult && sameRequest(cachedResult.request, request)
@@ -93,6 +95,11 @@ export function ReportScreen({ request, cachedResult, onChangeParcel, simulateEr
     return () => controller.abort();
     // Zapytanie porównujemy po wartościach, nie po referencji obiektu.
   }, [request?.parcelId, request?.cropId, request?.analysisDate, attempt, simulateError]);
+
+  useEffect(() => {
+    if (state.kind === 'ok') onLoaded?.(state.result);
+    // Tylko przy nowym wyniku.
+  }, [state.kind === 'ok' ? state.result : null]);
 
   // Po wejściu na raport przenosimy fokus na nagłówek – czytnik ekranu ogłasza nowy widok.
   useEffect(() => {

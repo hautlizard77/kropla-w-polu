@@ -193,7 +193,7 @@ export default function TerrainPanel({ parcelId, analysisDate }: Props) {
 
       {terrainValue && (
         <>
-          <OriginNote terrain={terrainValue} loadMs={loadMs} />
+          <OriginNote terrain={terrainValue} />
 
           <div className="terrain-toolbar no-print">
             <div className="segmented" role="group" aria-label="Widok">
@@ -329,8 +329,7 @@ function formatMs(ms: number): string {
   return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toLocaleString('pl-PL', { maximumFractionDigits: 1 })} s`;
 }
 
-function OriginNote({ terrain, loadMs }: { terrain: TerrainResult; loadMs: number | null }) {
-  const dem = terrain.sources[1];
+function OriginNote({ terrain }: { terrain: TerrainResult }) {
   if (terrain.origin === 'demo') {
     return (
       <p className="data-note data-note--demo">
@@ -341,16 +340,8 @@ function OriginNote({ terrain, loadMs }: { terrain: TerrainResult; loadMs: numbe
       </p>
     );
   }
-  return (
-    <p className="data-note">
-      <Icon name="check" size={18} />
-      <span>
-        <strong>Dane obserwowane:</strong> granica z ULDK, NMT z Geoportalu w rozdzielczości {dem?.resolutionM ?? '—'} m
-        {terrain.cached ? ' (wynik z bufora)' : ''}
-        {loadMs !== null ? ` · przygotowanie ${formatMs(loadMs)}` : ''}.
-      </span>
-    </p>
-  );
+  // Dla danych rzeczywistych źródła są w zakładce „Źródła danych” – bez osobnej ramki tutaj.
+  return null;
 }
 
 function Swatch({ color, label, line }: { color: string; label: string; line?: boolean }) {

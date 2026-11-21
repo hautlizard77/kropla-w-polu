@@ -1,25 +1,35 @@
 /**
- * Prognoza na najbliższe dni: opad i ET0 z Open-Meteo, a z nich – dalszy ciąg bilansu wody w strefie korzeni
- * od stanu na dzień analizy. Na tej podstawie wskazówki, jak postępować z wybraną uprawą.
+ * Bilans wody na najbliższe dni i plan działań dla wybranej uprawy.
  *
- * Reguły są proste i jawne (każda wskazówka podaje liczby, z których wynika). Progi:
- * - ulewa: ≥ 20 mm/dobę (silny opad – ryzyko spływu i erozji), opad znaczący: ≥ 10 mm w 3 dni,
- * - przymrozek: Tmin ≤ 0 °C w sezonie, upał: Tmax ≥ 30 °C.
+ * Z prognozy (Open-Meteo: opad, ET0, temperatura) liczymy dalszy ciąg bilansu FAO-56 od stanu na dzień analizy:
+ * ile wody uprawa potrzebuje (ETc = Kc · ET0), ile spadnie, ile z tego zostanie w strefie korzeni, a ile przepadnie
+ * (nadmiar ponad pojemność gleby), jaki będzie zapas na koniec okresu i ile dni uprawa spędzi w stresie.
+ * Osobno symulujemy wariant z nawadnianiem: dawka, gdy zapas spada poniżej progu stresu, chyba że w ciągu 2 dni
+ * spadnie wystarczająco dużo deszczu. Z tego powstaje plan nawadniania (mm, m³/ha, m³ na działkę) i lista kroków.
+ *
+ * Progi reguł: silny opad ≥ 20 mm/dobę, przymrozek Tmin ≤ 0 °C (młode fazy), upał Tmax ≥ 30 °C,
+ * dawka nawadniania 10–30 mm (więcej woda przesiąka poniżej korzeni), co najmniej 3 dni między dawkami.
  */
 import { cropLabel, getCrop } from '../../src/data/crops';
-import { STAGE_LABELS } from '../../src/data/cropParams';
-import type { AnalysisRequest, ForecastAdvice, ForecastDay, RiskLevel, WaterForecast } from '../../src/types/analysis';
+import { CROP_PARAMS, STAGE_LABELS, cropDay, type Stage } from '../../src/data/cropParams';
+import type { AnalysisRequest, ForecastBalance, ForecastStep, IrrigationEvent, IrrigationPlan, WaterForecast } from '../../src/types/analysis';
 import type { SoilProfile } from '../sources/soil';
-import type { ForecastSeries, WeatherSeries } from '../sources/weather';
-import { classify, simulate, type SimDay } from './assess';
+import type { ForecastDayRaw, ForecastSeries } from '../sources/weather';
+import { classify, type SimDay } from './assess';
+import { readilyAvailableWater, totalAvailableWater } from './waterBalance';
 
 export const FORECAST_SOURCE_ID = 'prognoza';
-/** Prognozę pokazujemy, gdy data analizy to dziś albo jeden z 3 ostatnich dni. */
+/** Bilans pokazujemy, gdy data analizy to dziś albo jeden z 3 ostatnich dni. */
 export const FORECAST_MAX_AGE_DAYS = 3;
+const BALANCE_DAYS = 7;
 const HEAVY_RAIN_MM = 20;
+const MIN_DOSE_MM = 10;
 const MAX_DOSE_MM = 30;
+/** Najkrótszy odstęp między dawkami – woda musi wsiąknąć, a pole musi być dostępne dla sprzętu. */
+const MIN_INTERVAL_DAYS = 3;
 const MONTHS_NOM = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'];
 const WEEKDAYS = ['niedz.', 'pon.', 'wt.', 'śr.', 'czw.', 'pt.', 'sob.'];
+const IRRIGATED_GROUPS = new Set(['warzywa', 'okopowe', 'owoce']);
 
 /** Krótka data: „pt. 27.11”. */
 export function shortDate(iso: string): string {
@@ -28,14 +38,16 @@ export function shortDate(iso: string): string {
 }
 
 const r = (v: number) => Math.round(v);
-const sum = (values: (number | null)[]) => values.reduce<number>((a, b) => a + (b ?? 0), 0);
+const r1 = (v: number) => Math.round(v * 10) / 10;
+const m3 = (mm: number) => r(mm * 10);
+const fmt = (v: number) => v.toLocaleString('pl-PL');
 
 export function notApplicableForecast(message: string): WaterForecast {
-  return { status: 'not_applicable', message, issuedAt: null, stressThresholdPct: null, days: [], advice: [], totals: null, sourceId: null };
+  return { status: 'not_applicable', message, issuedAt: null, balance: null, irrigationPlan: null, steps: [], sourceId: null };
 }
 
 export function unavailableForecast(message: string): WaterForecast {
-  return { status: 'unavailable', message, issuedAt: null, stressThresholdPct: null, days: [], advice: [], totals: null, sourceId: null };
+  return { status: 'unavailable', message, issuedAt: null, balance: null, irrigationPlan: null, steps: [], sourceId: null };
 }
 
 export interface ForecastInput {
@@ -43,264 +55,328 @@ export interface ForecastInput {
   forecast: ForecastSeries;
   /** Dzień, na który policzono bilans (może być wcześniejszy od daty analizy, gdy brak najnowszych danych). */
   evalDate: string;
-  /** Stan na dzień oceny; null – bez bilansu (brak gleby lub pogody), wtedy pokazujemy samą prognozę. */
+  /** Stan na dzień oceny; null – bez bilansu (brak gleby lub pogody). */
   state: SimDay | null;
   horizons: SoilProfile['horizons'] | null;
+  areaHa: number | null;
+}
+
+interface DayRun {
+  date: string;
+  past: boolean;
+  rain: number;
+  et0: number;
+  tMin: number | null;
+  tMax: number | null;
+  stage: Stage;
+  inSeason: boolean;
+  taw: number;
+  raw: number;
+  /** ETc bez niedoboru i rzeczywiste (z Ks). */
+  etcPotential: number;
+  etcActual: number;
+  rainUsed: number;
+  rainLost: number;
+  irrigation: number;
+  /** Ubytek na koniec dnia. */
+  dr: number;
+}
+
+/** Dzienny bilans od ubytku dr0; z nawadnianiem – dawka rano, gdy zapas jest poniżej progu, a deszcz go nie uzupełni. */
+function runDays(cropId: AnalysisRequest['cropId'], horizons: SoilProfile['horizons'], dr0: number, days: ForecastDayRaw[], irrigate: boolean): DayRun[] {
+  const p = CROP_PARAMS[cropId].p;
+  const tawCache = new Map<number, number>();
+  const tawFor = (zr: number) => {
+    const key = Math.round(zr * 20) / 20;
+    if (!tawCache.has(key)) tawCache.set(key, totalAvailableWater(horizons, key).tawMm ?? 0);
+    return tawCache.get(key)!;
+  };
+  const out: DayRun[] = [];
+  let dr = dr0;
+  let lastIrrigation = -Infinity;
+  days.forEach((day, i) => {
+    const crop = cropDay(cropId, day.date);
+    const taw = tawFor(crop.zr);
+    const raw = readilyAvailableWater(taw, p);
+    dr = Math.min(dr, taw);
+    const rain = day.precipitationMm ?? 0;
+    const et0 = day.et0Mm ?? 0;
+    let irrigation = 0;
+    if (irrigate && !day.past && crop.inSeason && dr > raw && i - lastIrrigation >= MIN_INTERVAL_DAYS) {
+      const rainSoon = days.slice(i, i + 2).reduce((s, d) => s + (d.precipitationMm ?? 0), 0);
+      if (rainSoon < dr - raw) {
+        irrigation = Math.max(MIN_DOSE_MM, Math.min(MAX_DOSE_MM, r(dr)));
+        dr = Math.max(0, dr - irrigation);
+        lastIrrigation = i;
+      }
+    }
+    const ks = dr <= raw ? 1 : Math.max(0, (taw - dr) / Math.max(1e-6, taw - raw));
+    const etcPotential = crop.kc * et0;
+    const etcActual = etcPotential * ks;
+    const before = dr + etcActual;
+    const rainUsed = Math.min(rain, before);
+    dr = Math.min(taw, Math.max(0, before - rain));
+    out.push({
+      date: day.date,
+      past: day.past,
+      rain,
+      et0,
+      tMin: day.tMin,
+      tMax: day.tMax,
+      stage: crop.stage,
+      inSeason: crop.inSeason,
+      taw,
+      raw,
+      etcPotential,
+      etcActual,
+      rainUsed,
+      rainLost: rain - rainUsed,
+      irrigation,
+      dr,
+    });
+  });
+  return out;
 }
 
 export function buildForecast(input: ForecastInput): WaterForecast {
-  const { request, forecast, evalDate, state, horizons } = input;
-  const raw = forecast.days.filter((d) => d.date > evalDate);
-  if (raw.length === 0) return unavailableForecast('Prognoza nie obejmuje dni po dacie analizy.');
+  const { request, forecast, evalDate, state, horizons, areaHa } = input;
+  const raw = forecast.days.filter((d) => d.date > evalDate && d.precipitationMm !== null && d.et0Mm !== null);
+  const futureRaw = raw.filter((d) => !d.past);
+  if (futureRaw.length === 0) return unavailableForecast('Prognoza nie obejmuje dni po dacie analizy.');
+  const issuedAt = forecast.issuedAt;
 
-  // Dalszy ciąg bilansu od stanu na dzień oceny.
-  let projection: SimDay[] = [];
-  if (state && horizons) {
-    const series: WeatherSeries = {
-      days: raw.map((d) => ({ date: d.date, precipitationMm: d.precipitationMm, et0Mm: d.et0Mm, source: 'open-meteo-forecast' as const })),
-      sources: [],
-      lastCompleteDate: null,
-      notes: [],
-    };
-    projection = simulate(series, {
-      cropId: request.cropId,
-      horizons,
-      tawScale: 1,
-      from: raw[0]!.date,
-      to: raw[raw.length - 1]!.date,
-      initialDr: state.dr,
-    });
-  }
-  const byDate = new Map(projection.map((p) => [p.date, p]));
-
-  const days: ForecastDay[] = raw.map((d) => {
-    const p = byDate.get(d.date);
+  if (!state || !horizons) {
+    const rain = r(futureRaw.slice(0, BALANCE_DAYS).reduce((s, d) => s + (d.precipitationMm ?? 0), 0));
     return {
-      date: d.date,
-      past: d.past,
-      precipitationMm: d.precipitationMm === null ? null : Math.round(d.precipitationMm * 10) / 10,
-      probabilityPct: d.probabilityPct,
-      et0Mm: d.et0Mm === null ? null : Math.round(d.et0Mm * 10) / 10,
-      etcMm: p ? p.etc : null,
-      tMax: d.tMax === null ? null : Math.round(d.tMax),
-      tMin: d.tMin === null ? null : Math.round(d.tMin),
-      reservePct: p ? r((100 * (p.taw - p.dr)) / Math.max(1, p.taw)) : null,
-      level: (p ? classify(p.dr, p.taw, p.raw) : 'insufficient_data') as RiskLevel,
+      status: 'ok',
+      message: 'Bez danych o glebie nie da się policzyć bilansu wody – podajemy tylko prognozowany opad.',
+      issuedAt,
+      balance: null,
+      irrigationPlan: null,
+      steps: [
+        {
+          id: 'opady',
+          when: `Do ${shortDate(futureRaw[Math.min(BALANCE_DAYS, futureRaw.length) - 1]!.date)}`,
+          tone: 'info',
+          title: `Prognozowany opad: ok. ${rain} mm w ${Math.min(BALANCE_DAYS, futureRaw.length)} dni`,
+          text: 'Bez danych o glebie nie oceniamy, czy ta ilość wystarczy uprawie. Sprawdź wilgotność gleby w terenie (próba na kulkę z ziemi z głębokości 20–30 cm).',
+        },
+      ],
+      sourceId: FORECAST_SOURCE_ID,
     };
-  });
+  }
 
-  const future = days.filter((d) => !d.past);
-  const next = (n: number) => future.slice(0, n);
-  const totals = {
-    rain3: r(sum(next(3).map((d) => d.precipitationMm))),
-    rain7: r(sum(next(7).map((d) => d.precipitationMm))),
-    rain10: r(sum(future.map((d) => d.precipitationMm))),
-    etc7: r(sum(next(7).map((d) => d.etcMm))),
+  // Dni, które już minęły (brak ich w archiwum), przesuwają stan do „dziś” – bez nawadniania.
+  const dry = runDays(request.cropId, horizons, state.dr, raw, false);
+  const withIrrigation = runDays(request.cropId, horizons, state.dr, raw, true);
+  const future = dry.filter((d) => !d.past);
+  const pastRuns = dry.filter((d) => d.past);
+  const startDr = pastRuns.length > 0 ? pastRuns[pastRuns.length - 1]!.dr : state.dr;
+  const startTaw = future[0]!.taw;
+  const startRaw = future[0]!.raw;
+  const window = future.slice(0, BALANCE_DAYS);
+  const end = window[window.length - 1]!;
+  const sum = (f: (d: DayRun) => number) => window.reduce((s, d) => s + f(d), 0);
+
+  const balance: ForecastBalance = {
+    horizonDays: window.length,
+    from: window[0]!.date,
+    to: end.date,
+    startReserveMm: r(Math.max(0, startTaw - startDr)),
+    startReservePct: r((100 * Math.max(0, startTaw - startDr)) / Math.max(1, startTaw)),
+    fullReserveMm: r(startTaw),
+    stressThresholdPct: r((100 * (startTaw - startRaw)) / Math.max(1, startTaw)),
+    needMm: r(sum((d) => d.etcPotential)),
+    rainMm: r(sum((d) => d.rain)),
+    rainUsedMm: r(sum((d) => d.rainUsed)),
+    rainLostMm: r(sum((d) => d.rainLost)),
+    endReserveMm: r(end.taw - end.dr),
+    endReservePct: r((100 * (end.taw - end.dr)) / Math.max(1, end.taw)),
+    endLevel: classify(end.dr, end.taw, end.raw),
+    stressDays: window.filter((d) => d.inSeason && d.dr > d.raw).length,
   };
 
-  const advice = buildAdvice({ request, state, projection, days, future, totals });
-  const stressThresholdPct = state ? r((100 * (state.taw - state.raw)) / Math.max(1, state.taw)) : null;
-  const pastCount = days.length - future.length;
+  const crop = getCrop(request.cropId);
+  const typicallyIrrigated = crop ? IRRIGATED_GROUPS.has(crop.group) : false;
+  const events: IrrigationEvent[] = withIrrigation
+    .filter((d) => d.irrigation > 0)
+    .map((d) => ({ date: d.date, doseMm: d.irrigation, m3PerHa: m3(d.irrigation), m3Parcel: areaHa ? r(m3(d.irrigation) * areaHa) : null }));
+  const totalMm = events.reduce((s, e) => s + e.doseMm, 0);
+  const irrigationPlan: IrrigationPlan = {
+    events,
+    totalMm,
+    totalM3PerHa: m3(totalMm),
+    totalM3Parcel: areaHa ? r(m3(totalMm) * areaHa) : null,
+    typicallyIrrigated,
+    horizonDays: future.length,
+  };
+
+  const steps = buildSteps({ request, future, startDr, startRaw, balance, plan: irrigationPlan, areaHa });
 
   return {
     status: 'ok',
     message:
-      `Prognoza na ${future.length} dni od ${shortDate(future[0]?.date ?? raw[0]!.date)}` +
-      (pastCount > 0 ? `, poprzedzona ${pastCount} ostatnimi dniami (dane modelowe), których nie było jeszcze w archiwum.` : '.') +
-      (state ? '' : ' Bez danych o glebie nie liczymy zapasu wody – pokazujemy samą pogodę.'),
-    issuedAt: forecast.issuedAt,
-    stressThresholdPct,
-    days,
-    advice,
-    totals,
+      `Bilans na ${balance.horizonDays} dni (${shortDate(balance.from)} – ${shortDate(balance.to)}), plan nawadniania na ${future.length} dni.` +
+      (pastRuns.length > 0 ? ` Uwzględniono też ${pastRuns.length} ostatnie dni, których nie ma jeszcze w archiwum pogody.` : ''),
+    issuedAt,
+    balance,
+    irrigationPlan,
+    steps,
     sourceId: FORECAST_SOURCE_ID,
   };
 }
 
-const IRRIGATED_GROUPS = new Set(['warzywa', 'okopowe', 'owoce']);
-
-function buildAdvice(ctx: Parameters<typeof buildAdviceInner>[0]): ForecastAdvice[] {
-  const { main, heavy } = buildAdviceInner(ctx);
-  return main.length > 0 ? [main[0]!, ...heavy, ...main.slice(1)] : heavy;
-}
-
-function buildAdviceInner(ctx: {
+function buildSteps(ctx: {
   request: AnalysisRequest;
-  state: SimDay | null;
-  projection: SimDay[];
-  days: ForecastDay[];
-  future: ForecastDay[];
-  totals: { rain3: number; rain7: number; rain10: number; etc7: number };
-}): { main: ForecastAdvice[]; heavy: ForecastAdvice[] } {
-  const { request, state, projection, future, totals } = ctx;
+  future: DayRun[];
+  startDr: number;
+  startRaw: number;
+  balance: ForecastBalance;
+  plan: IrrigationPlan;
+  areaHa: number | null;
+}): ForecastStep[] {
+  const { request, future, startDr, startRaw, balance, plan, areaHa } = ctx;
   const crop = getCrop(request.cropId);
   const name = cropLabel(request.cropId).toLowerCase();
-  const advice: ForecastAdvice[] = [];
-  const first = future[0];
-  if (!first) return { main: advice, heavy: [] };
-
-  const heavy = future.filter((d) => (d.precipitationMm ?? 0) >= HEAVY_RAIN_MM);
+  const first = future[0]!;
+  const inSeason = first.inSeason;
+  const steps: ForecastStep[] = [];
+  const heavy = future.find((d) => d.rain >= HEAVY_RAIN_MM);
   const frost = future.slice(0, 7).find((d) => d.tMin !== null && d.tMin <= 0);
   const heat = future.slice(0, 7).filter((d) => d.tMax !== null && d.tMax >= 30);
-  const inSeason = state?.inSeason ?? false;
-  const irrigatedTypically = crop ? IRRIGATED_GROUPS.has(crop.group) : false;
   const month = Number(first.date.slice(5, 7));
-  const criticalNow = crop?.criticalMonths.includes(month) ?? false;
-  const rainWhen = (n: number) => {
-    const wet = future.slice(0, n).filter((d) => (d.precipitationMm ?? 0) >= 2);
-    return wet.length > 0 ? wet.map((d) => `${shortDate(d.date)} – ${r(d.precipitationMm ?? 0)} mm`).join(', ') : 'brak dni z opadem powyżej 2 mm';
-  };
+  const stressedNow = inSeason && startDr > startRaw;
+  const stressStart = stressedNow ? null : future.find((d) => d.inSeason && d.dr > d.raw) ?? null;
+  const parcelM3 = (mm: number) => (areaHa ? `, czyli ok. ${fmt(r(m3(mm) * areaHa))} m³ na całą działkę (${fmt(r1(areaHa))} ha)` : '');
 
-  // Ulewa – niezależnie od sezonu; wstawiana zaraz po głównej wskazówce dla uprawy.
-  const heavyAdvice: ForecastAdvice[] = [];
-  if (heavy.length > 0) {
-    const d = heavy[0]!;
-    heavyAdvice.push({
-      id: 'ulewa',
-      tone: 'warning',
-      title: `Silny opad ${shortDate(d.date)}: ok. ${r(d.precipitationMm ?? 0)} mm`,
-      text:
-        'Nie planuj na ten czas oprysków ani nawożenia – deszcz zmyje środki i nawóz. Na stokach i gołej glebie rośnie ryzyko spływu i erozji. ' +
-        'Jeśli na działce lub obok jest rów z zastawką albo zagłębienie, w którym zbiera się woda, wykorzystaj je, żeby zatrzymać wodę na polu ' +
-        '(gdzie spływa woda, pokazuje zakładka „Teren i spływ 3D”).',
-    });
-  }
-
-  if (!state) {
-    advice.push({
-      id: 'opady',
-      tone: 'info',
-      title: `W ciągu 7 dni ok. ${totals.rain7} mm deszczu`,
-      text: `Dni z opadem: ${rainWhen(7)}. Bez danych o glebie nie oceniamy, czy ta ilość wystarczy uprawie.`,
-    });
-    return { main: advice, heavy: heavyAdvice };
-  }
-
+  // 1. Główny krok: co z wodą dla tej uprawy.
   if (!inSeason) {
-    advice.push({
+    steps.push({
       id: 'poza-sezonem',
-      tone: totals.rain7 >= 10 ? 'good' : 'info',
-      title: totals.rain7 >= 10 ? 'Opady uzupełnią zapas wody w glebie' : `Poza sezonem uprawy (${name})`,
+      when: 'Teraz',
+      tone: balance.rainMm >= 10 ? 'good' : 'info',
+      title: balance.rainMm >= 10 ? 'Zatrzymaj wodę z opadów na następny sezon' : `Poza sezonem uprawy (${name}) – zadbaj o zapas na wiosnę`,
       text:
-        `W ciągu 7 dni prognozowane ok. ${totals.rain7} mm (${rainWhen(7)}). Zapas wody w glebie: ${ctx.days[0]?.reservePct ?? '–'}%. ` +
-        'Teraz najważniejsze jest zatrzymanie wody na następny sezon: zostaw resztki pożniwne albo międzyplon i nie pozostawiaj gleby gołej na zimę.',
+        `W ciągu ${balance.horizonDays} dni spadnie ok. ${balance.rainMm} mm, z czego ok. ${balance.rainUsedMm} mm uzupełni glebę. ` +
+        'Zostaw resztki pożniwne albo międzyplon i nie zostawiaj gleby gołej na zimę – okrywa zatrzymuje wodę i chroni przed erozją.',
     });
-    if (frost) {
-      advice.push({ id: 'mroz', tone: 'info', title: `Mróz ${shortDate(frost.date)} (${frost.tMin} °C)`, text: 'Nie wykonuj zabiegów na zamarzniętej glebie – ugniatasz ją i pogarszasz wsiąkanie wody.' });
-    }
-    return { main: advice, heavy: heavyAdvice };
-  }
-
-  const deficitNow = Math.max(0, state.dr - state.raw);
-  const stressedNow = state.dr > state.raw;
-  const byDate = new Map(projection.map((p) => [p.date, p]));
-  const futureProj = future.map((d) => byDate.get(d.date)).filter((p): p is SimDay => Boolean(p));
-  const stressStart = stressedNow ? null : futureProj.find((p) => p.dr > p.raw) ?? null;
-  const lowest = futureProj.reduce<SimDay | null>((m, p) => (m === null || p.taw - p.dr < m.taw - m.dr ? p : m), null);
-  const lowestPct = lowest ? r((100 * (lowest.taw - lowest.dr)) / Math.max(1, lowest.taw)) : null;
-  const doseFor = (p: SimDay) => Math.min(MAX_DOSE_MM, r(p.dr));
-  const stageText = STAGE_LABELS[state.stage];
-  /** Po odbudowie zapasu przez deszcz – czy niedobór wróci jeszcze w okresie prognozy. */
-  const relapseText = () => {
-    const recovered = futureProj.findIndex((p) => p.dr <= p.raw);
-    if (recovered < 0) return '';
-    const back = futureProj.slice(recovered).find((p) => p.dr > p.raw);
-    return back ? ` Uwaga: bez kolejnych opadów zapas znów spadnie poniżej progu stresu ok. ${shortDate(back.date)} – wtedy wróć do nawadniania.` : '';
-  };
-
-  if (stressedNow) {
-    if (totals.rain3 >= 10 && totals.rain3 >= 0.8 * deficitNow) {
-      advice.push({
-        id: 'wstrzymaj-nawadnianie',
-        tone: 'good',
-        title: 'Wstrzymaj się z nawadnianiem – deszcz uzupełni wodę',
-        text:
-          `W ciągu 3 dni prognozowane ok. ${totals.rain3} mm (${rainWhen(3)}), a do wyjścia ze stresu brakuje ok. ${r(deficitNow)} mm. ` +
-          'Nawadnianie tuż przed deszczem zwykle się marnuje (odpływ, wymywanie azotu). Sprawdź wilgotność gleby po opadach.' +
-          relapseText(),
-      });
-    } else if (totals.rain7 < 10) {
-      const last = futureProj[Math.min(6, futureProj.length - 1)];
-      advice.push({
-        id: 'susza-trwa',
-        tone: 'warning',
-        title: `Niedobór wody się pogłębi – ${name} jest w stresie`,
-        text:
-          `W 7 dni spadnie tylko ok. ${totals.rain7} mm, a uprawa zużyje ok. ${totals.etc7} mm. ` +
-          (last ? `Zapas wody spadnie do ok. ${r((100 * (last.taw - last.dr)) / Math.max(1, last.taw))}% (${shortDate(last.date)}). ` : '') +
-          (irrigatedTypically
-            ? `Jeśli masz możliwość nawadniania, nie czekaj na deszcz: podaj do ${doseFor(state)} mm jednorazowo, rano lub wieczorem, i powtórz po kilku dniach według stanu gleby.`
-            : `Jeśli masz deszczownię, nawadnianie dawką do ${doseFor(state)} mm jest uzasadnione. Bez niej ogranicz straty wody: nie spulchniaj teraz gleby i odłóż pogłówne nawożenie azotem do deszczu – w suchej glebie słabo działa.`),
-      });
-    } else {
-      advice.push({
-        id: 'deszcz-czesciowo',
-        tone: 'info',
-        title: 'Deszcz tylko częściowo złagodzi niedobór',
-        text:
-          `W 7 dni prognozowane ok. ${totals.rain7} mm (${rainWhen(7)}) wobec zużycia ok. ${totals.etc7} mm przez uprawę` +
-          (lowestPct !== null ? `; zapas wody najniżej ok. ${lowestPct}%` : '') +
-          '. ' +
-          (irrigatedTypically
-            ? 'Nawadniaj tylko wtedy, gdy deszcz nie spadnie w zapowiadanym terminie – sprawdź prognozę ponownie jutro.'
-            : 'Odłóż zabiegi uprawowe do opadów i sprawdź prognozę ponownie jutro.'),
-      });
-    }
-  } else if (stressStart) {
-    const daysAhead = Math.round((Date.parse(stressStart.date) - Date.parse(first.date)) / 86400000) + 1;
-    advice.push({
-      id: 'stres-wkrotce',
-      tone: 'warning',
-      title: `Za ok. ${daysAhead} ${daysAhead === 1 ? 'dzień' : 'dni'} zacznie brakować wody`,
-      text:
-        `Od ${shortDate(stressStart.date)} zapas wody spadnie poniżej progu, przy którym ${name} ogranicza wzrost. ` +
-        `Prognozowany opad do tego dnia: ${r(sum(future.filter((d) => d.date <= stressStart.date).map((d) => d.precipitationMm)))} mm, zużycie wody przez uprawę ok. ${r(sum(future.filter((d) => d.date <= stressStart.date).map((d) => d.etcMm)))} mm. ` +
-        (irrigatedTypically
-          ? `Przygotuj nawadnianie od ok. ${shortDate(stressStart.date)} (dawka do ${doseFor(stressStart)} mm).`
-          : 'Zaplanuj zabiegi tak, żeby nie przesuszać gleby (bez głębokiego spulchniania), a nawożenie pogłówne – przed zapowiadanym deszczem, nie w suszy.'),
+  } else if (plan.events.length === 0) {
+    steps.push({
+      id: stressedNow ? 'deszcz-wystarczy' : 'zapas-wystarczy',
+      when: 'Ten tydzień',
+      tone: 'good',
+      title: stressedNow ? 'Nie nawadniaj – deszcz uzupełni wodę' : 'Nawadnianie nie jest potrzebne',
+      text: stressedNow
+        ? `Uprawa jest teraz w stresie, ale prognozowany deszcz (${balance.rainMm} mm) wyprowadzi zapas powyżej progu. Nawadnianie tuż przed deszczem marnuje wodę (odpływ, wymywanie azotu).`
+        : `Opad (${balance.rainMm} mm) i zapas w glebie (${balance.startReserveMm} mm) pokryją potrzeby uprawy (${balance.needMm} mm). Na koniec okresu zapas: ${balance.endReservePct}%.`,
     });
   } else {
-    advice.push({
-      id: 'zapas-wystarczy',
-      tone: 'good',
-      title: 'Zapas wody wystarczy na najbliższe dni',
-      text:
-        `Przy prognozowanych ok. ${totals.rain7} mm deszczu w 7 dni i zużyciu ok. ${totals.etc7} mm przez uprawę zapas nie spadnie poniżej progu stresu` +
-        (lowestPct !== null ? ` (najniżej ok. ${lowestPct}%)` : '') +
-        '. Nawadnianie nie jest potrzebne.',
-    });
-  }
-
-  if (criticalNow && (stressedNow || stressStart)) {
-    advice.push({
-      id: 'okres-krytyczny',
-      tone: 'info',
-      title: `${MONTHS_NOM[month - 1]} to okres największej wrażliwości uprawy`,
-      text: `Uprawa: ${name}, ${stageText}. Niedobór wody w tym okresie najmocniej obniża plon – jeśli wody do nawadniania jest mało, tej uprawie warto ją przeznaczyć w pierwszej kolejności.`,
-    });
-  }
-
-  if (frost && (state.stage === 'poczatkowa' || state.stage === 'rozwoju')) {
-    advice.push({
-      id: 'przymrozek',
+    const e0 = plan.events[0]!;
+    const later = plan.events.slice(1).map((e) => `${shortDate(e.date)} – ${e.doseMm} mm`).join(', ');
+    const waitForRain = stressedNow && e0.date !== first.date;
+    steps.push({
+      id: 'nawadnianie',
+      when: e0.date === first.date ? 'Teraz' : shortDate(e0.date),
       tone: 'warning',
-      title: `Możliwy przymrozek ${shortDate(frost.date)} (${frost.tMin} °C)`,
+      title: plan.typicallyIrrigated
+        ? `Nawodnij: ${e0.doseMm} mm (${fmt(e0.m3PerHa)} m³/ha)`
+        : `Jeśli masz deszczownię: ${e0.doseMm} mm (${fmt(e0.m3PerHa)} m³/ha)`,
       text:
-        `Młode rośliny (${name}) są wrażliwe na przymrozki – obejrzyj plantację po tej nocy.` +
+        (waitForRain ? 'Do tego dnia wstrzymaj się – wcześniej spadnie deszcz. ' : '') +
+        `Dawka ${e0.doseMm} mm to ${fmt(e0.m3PerHa)} m³ wody na hektar${parcelM3(e0.doseMm)}. Podawaj rano lub wieczorem. ` +
+        (later ? `Według prognozy kolejne dawki: ${later}. ` : '') +
+        `Razem w ${plan.horizonDays} dni: ${plan.totalMm} mm (${fmt(plan.totalM3PerHa)} m³/ha${areaHa ? `, ${fmt(plan.totalM3Parcel ?? 0)} m³ na działkę` : ''}). ` +
+        'Przed każdą dawką sprawdź prognozę – jeśli zapowiadany deszcz się zmieni, plan też się zmieni.',
+    });
+    if (!plan.typicallyIrrigated) {
+      steps.push({
+        id: 'bez-deszczowni',
+        when: 'Ten tydzień',
+        tone: 'info',
+        title: 'Bez nawadniania – ogranicz straty wody',
+        text: `${cropLabel(request.cropId)} rzadko się nawadnia. Bez deszczowni: nie spulchniaj teraz gleby (każdy zabieg przesusza wierzchnią warstwę) i odłóż pogłówne nawożenie azotem do deszczu – w suchej glebie słabo działa.`,
+      });
+    }
+  }
+
+  if (stressStart && plan.events.length > 0 && stressStart.date !== plan.events[0]!.date) {
+    steps.push({
+      id: 'stres-od',
+      when: `Od ${shortDate(stressStart.date)}`,
+      tone: 'info',
+      title: 'Od tego dnia zacznie brakować wody',
+      text: `Bez nawadniania zapas spadnie poniżej progu stresu (${balance.stressThresholdPct}% pełnego zapasu) – ${name} zacznie ograniczać wzrost.`,
+    });
+  }
+
+  // 2. Ulewa.
+  if (heavy) {
+    steps.push({
+      id: 'ulewa',
+      when: shortDate(heavy.date),
+      tone: 'warning',
+      title: `Silny opad: ok. ${r(heavy.rain)} mm – bez oprysków i nawożenia`,
+      text:
+        'Przesuń opryski i nawożenie na po deszczu – inaczej zostaną zmyte. ' +
+        (heavy.rainLost > 1 ? `Gleba przyjmie tylko część opadu – ok. ${r(heavy.rainLost)} mm przesiąknie głębiej lub spłynie. ` : '') +
+        'Jeśli jest rów z zastawką albo zagłębienie, w którym zbiera się woda, zatrzymaj w nim wodę (zakładka „Teren i spływ 3D” pokazuje, gdzie spływa).',
+    });
+  }
+
+  // 3. Okres krytyczny uprawy.
+  if (inSeason && crop?.criticalMonths.includes(month) && (stressedNow || stressStart || plan.events.length > 0)) {
+    steps.push({
+      id: 'okres-krytyczny',
+      when: MONTHS_NOM[month - 1]!,
+      tone: 'info',
+      title: 'Okres największej wrażliwości uprawy',
+      text: `${cropLabel(request.cropId)}: ${STAGE_LABELS[first.stage]}. Niedobór wody teraz najmocniej obniża plon – jeśli wody jest mało, tej uprawie przeznacz ją w pierwszej kolejności.`,
+    });
+  }
+
+  // 4. Przymrozek i upał.
+  if (frost && inSeason && (first.stage === 'poczatkowa' || first.stage === 'rozwoju')) {
+    steps.push({
+      id: 'przymrozek',
+      when: shortDate(frost.date),
+      tone: 'warning',
+      title: `Możliwy przymrozek (${frost.tMin} °C)`,
+      text:
+        `Młode rośliny (${name}) są wrażliwe – obejrzyj plantację po tej nocy.` +
         (crop?.group === 'owoce' ? ' W sadach i na truskawkach stosuje się osłony (agrowłóknina) lub zraszanie przeciwprzymrozkowe.' : ''),
     });
-  }
-
-  if (heat.length > 0) {
-    const hottest = heat.reduce((a, b) => ((b.tMax ?? 0) > (a.tMax ?? 0) ? b : a));
-    advice.push({
-      id: 'upal',
+  } else if (frost && !inSeason) {
+    steps.push({
+      id: 'mroz',
+      when: shortDate(frost.date),
       tone: 'info',
-      title: `Upał ${shortDate(hottest.date)} (${hottest.tMax} °C) – większe zużycie wody`,
-      text: `W upalne dni uprawa zużywa nawet ${r(hottest.etcMm ?? 0)} mm wody dziennie. Jeśli nawadniasz, rób to rano lub wieczorem – w południe dużo wody odparowuje.`,
+      title: `Mróz (${frost.tMin} °C) – bez zabiegów na zamarzniętej glebie`,
+      text: 'Wjazd na zamarzniętą lub rozmarzającą glebę ją ugniata i pogarsza wsiąkanie wody.',
+    });
+  }
+  if (inSeason && heat.length > 0) {
+    const hottest = heat.reduce((a, b) => ((b.tMax ?? 0) > (a.tMax ?? 0) ? b : a));
+    steps.push({
+      id: 'upal',
+      when: shortDate(hottest.date),
+      tone: 'info',
+      title: `Upał (${hottest.tMax} °C) – uprawa zużyje ok. ${fmt(r1(hottest.etcPotential))} mm wody`,
+      text: 'W upalne dni nie nawadniaj w południe – dużo wody odparowuje. Najlepiej wcześnie rano.',
     });
   }
 
-  return { main: advice, heavy: heavyAdvice };
+  return orderSteps(steps, first.date, future);
 }
 
+/** Kolejność kroków: według dnia, którego dotyczą; kroki ogólne („Teraz”, „Ten tydzień”) na początku, miesiąc na końcu. */
+function orderSteps(steps: ForecastStep[], firstDate: string, future: DayRun[]): ForecastStep[] {
+  const dateOf = (step: ForecastStep): string => {
+    if (step.when === 'Teraz' || step.when === 'Ten tydzień') return firstDate;
+    const match = future.find((d) => step.when.endsWith(shortDate(d.date)));
+    return match ? match.date : '9999-12-31';
+  };
+  return steps
+    .map((step, index) => ({ step, index, date: dateOf(step) }))
+    .sort((a, b) => (a.date === b.date ? a.index - b.index : a.date < b.date ? -1 : 1))
+    .map((x) => x.step);
+}

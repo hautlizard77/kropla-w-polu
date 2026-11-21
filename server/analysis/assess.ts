@@ -241,7 +241,7 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
       return notApplicableForecast('Prognoza dotyczy najbliższych dni, więc pokazujemy ją dla analizy na dziś (albo na jeden z 3 ostatnich dni).');
     }
     if (!input.forecast) return unavailableForecast(input.forecastError ?? 'Usługa prognozy pogody nie odpowiedziała.');
-    return buildForecast({ request, forecast: input.forecast, evalDate: evalDay, state, horizons: soil?.horizons ?? null });
+    return buildForecast({ request, forecast: input.forecast, evalDate: evalDay, state, horizons: soil?.horizons ?? null, areaHa: parcel.areaHa > 0 ? parcel.areaHa : null });
   };
 
   // Wskaźniki pogodowe (niezależne od gleby).

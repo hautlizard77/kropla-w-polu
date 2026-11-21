@@ -197,25 +197,32 @@ function forecastSeries(start: string, n: number, f: (i: number) => { p: number;
 
 const dryHistory = (d: string): [number, number] => (d.slice(5, 7) >= '05' && d.slice(5, 7) <= '08' ? [1, 5] : [3, 1]);
 
-test('prognoza: w stresie, a za 2 dni ulewa – wstrzymaj nawadnianie, ostrzeżenie o ulewie, zapas rośnie', () => {
+test('bilans prognozy: w stresie, za 2 dni ulewa – nie nawadniaj teraz, rachunek się zgadza, ostrzeżenie o ulewie', () => {
   const weather = syntheticWeather('2014-03-01', '2024-07-01', dryHistory);
   const result = buildAssessment({
     request: { parcelId: parcel.id, cropId: 'ziemniaki', analysisDate: '2024-07-01' },
     parcel, weather, soil: soil(0.14, 0.05, 'lekka'), hydro: null,
     now: new Date('2024-07-01T12:00:00Z'), todayDate: '2024-07-01',
-    forecast: forecastSeries('2024-07-02', 10, (i) => ({ p: i === 1 ? 35 : 0, e: 4 })),
+    forecast: forecastSeries('2024-07-02', 10, (i) => ({ p: i === 1 ? 60 : 0, e: 4 })),
   });
   const f = result.forecast!;
   assert.equal(f.status, 'ok');
-  assert.equal(f.days.length, 10);
-  const ids = f.advice.map((a) => a.id);
+  const b = f.balance!;
+  assert.equal(b.horizonDays, 7);
+  assert.equal(b.rainMm, 60);
+  assert.equal(b.rainUsedMm + b.rainLostMm, b.rainMm);
+  assert.ok(b.rainLostMm > 0, 'gleba nie przyjmie ulewy ponad swoją pojemność');
+  // Pierwsza dawka nie wcześniej niż po deszczu.
+  const plan = f.irrigationPlan!;
+  assert.equal(plan.typicallyIrrigated, true);
+  assert.ok(plan.events.every((e) => e.date > '2024-07-03'), JSON.stringify(plan.events));
+  assert.ok(plan.events.every((e) => e.m3PerHa === e.doseMm * 10 && e.m3Parcel === e.doseMm * 10 * parcel.areaHa));
+  const ids = f.steps.map((s) => s.id);
   assert.ok(ids.includes('ulewa'), ids.join());
-  assert.ok(ids.includes('wstrzymaj-nawadnianie'), ids.join());
-  assert.ok((f.days[1]!.reservePct ?? 0) > (f.days[0]!.reservePct ?? 0));
   assert.ok(result.dataSources.some((s) => s.id === 'prognoza'));
 });
 
-test('prognoza: dobry zapas, ale sucho i gorąco – ostrzeżenie, kiedy zacznie brakować wody', () => {
+test('bilans prognozy: dobry zapas, sucho i gorąco – plan nawadniania z datą, upał', () => {
   const wet = (d: string): [number, number] => (d.slice(5, 7) >= '05' && d.slice(5, 7) <= '08' ? [4, 3] : [3, 1]);
   const weather = syntheticWeather('2014-03-01', '2024-07-01', wet);
   const result = buildAssessment({
@@ -225,12 +232,31 @@ test('prognoza: dobry zapas, ale sucho i gorąco – ostrzeżenie, kiedy zacznie
     forecast: forecastSeries('2024-07-02', 10, () => ({ p: 0, e: 6, tMax: 32 })),
   });
   assert.equal(result.currentState.level, 'low');
-  const ids = result.forecast!.advice.map((a) => a.id);
-  assert.ok(ids.includes('stres-wkrotce'), ids.join());
+  const f = result.forecast!;
+  assert.ok(f.balance!.needMm > 0 && f.balance!.rainMm === 0);
+  assert.ok(f.balance!.endReservePct < f.balance!.startReservePct);
+  assert.ok(f.irrigationPlan!.events.length > 0);
+  const dates = f.irrigationPlan!.events.map((e) => Date.parse(e.date));
+  assert.ok(dates.every((d, i) => i === 0 || d - dates[i - 1]! >= 3 * 86400000), 'odstęp między dawkami ≥ 3 dni');
+  const ids = f.steps.map((s) => s.id);
+  assert.ok(ids.includes('nawadnianie'), ids.join());
   assert.ok(ids.includes('upal'), ids.join());
 });
 
-test('prognoza: analiza historyczna – prognoza nie dotyczy; poza sezonem – rada o zatrzymaniu wody', () => {
+test('bilans prognozy: zboże bez deszczowni dostaje kroki ograniczania strat', () => {
+  const weather = syntheticWeather('2014-03-01', '2024-06-10', dryHistory);
+  const result = buildAssessment({
+    request: { parcelId: parcel.id, cropId: 'pszenica_ozima', analysisDate: '2024-06-10' },
+    parcel, weather, soil: soil(0.14, 0.05, 'lekka'), hydro: null,
+    now: new Date('2024-06-10T12:00:00Z'), todayDate: '2024-06-10',
+    forecast: forecastSeries('2024-06-11', 10, () => ({ p: 0.5, e: 5 })),
+  });
+  const ids = result.forecast!.steps.map((s) => s.id);
+  assert.deepEqual(ids.slice(0, 2), ['nawadnianie', 'bez-deszczowni']);
+  assert.ok(result.forecast!.steps[0]!.title.startsWith('Jeśli masz deszczownię'));
+});
+
+test('bilans prognozy: analiza historyczna – nie dotyczy; poza sezonem – zatrzymaj wodę, mróz', () => {
   const weather = syntheticWeather('2014-03-01', '2024-11-20', dryHistory);
   const past = buildAssessment({
     request: { parcelId: parcel.id, cropId: 'ziemniaki', analysisDate: '2024-07-01' },
@@ -242,5 +268,6 @@ test('prognoza: analiza historyczna – prognoza nie dotyczy; poza sezonem – r
     parcel, weather, soil: soil(0.3, 0.13, 'średnia'), hydro: null, todayDate: '2024-11-20', now: new Date('2024-11-20T12:00:00Z'),
     forecast: forecastSeries('2024-11-21', 10, (i) => ({ p: i % 2 ? 4 : 0, e: 0.5, tMin: -2, tMax: 3 })),
   });
-  assert.deepEqual(off.forecast!.advice.map((a) => a.id), ['poza-sezonem', 'mroz']);
+  assert.deepEqual(off.forecast!.steps.map((s) => s.id), ['poza-sezonem', 'mroz']);
+  assert.equal(off.forecast!.irrigationPlan!.events.length, 0);
 });

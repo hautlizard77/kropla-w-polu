@@ -211,11 +211,16 @@ function Report({
   }, [result.parcel.id]);
 
   const recCount = result.recommendations.length;
+  const MAIN_STEPS = ['nawadnianie', 'zapas-wystarczy', 'deszcz-wystarczy', 'poza-sezonem', 'opady'];
+  const mainStep =
+    result.forecast?.status === 'ok'
+      ? (result.forecast.steps.find((s) => MAIN_STEPS.includes(s.id)) ?? result.forecast.steps[0] ?? null)
+      : null;
   const tabs: TabDef[] = [
     { id: 'podsumowanie', label: 'Podsumowanie', icon: 'home' },
     { id: 'uprawa', label: 'Uprawa', icon: 'leaf' },
     { id: 'sytuacja', label: 'Sytuacja wodna', icon: 'drop', level: currentState.level },
-    { id: 'prognoza', label: 'Prognoza', icon: 'cloud' },
+    { id: 'prognoza', label: 'Bilans i plan', icon: 'calendar' },
     { id: 'zalecenia', label: recCount > 0 ? `Co robić (${recCount})` : 'Co robić', icon: 'check' },
     { id: 'teren', label: 'Teren i spływ 3D', icon: 'parcels' },
     { id: 'zrodla', label: 'Źródła danych', icon: 'file' },
@@ -271,13 +276,13 @@ function Report({
                 </button>
               </dd>
             </div>
-            {result.forecast?.status === 'ok' && result.forecast.advice[0] && (
+            {mainStep && (
               <div>
-                <dt>Najbliższe dni</dt>
+                <dt>Najbliższy tydzień</dt>
                 <dd>
-                  {result.forecast.advice[0].title}.{' '}
+                  <strong>{mainStep.when}:</strong> {mainStep.title}.{' '}
                   <button type="button" className="link-button no-print" onClick={() => openTab('prognoza')}>
-                    Prognoza i wskazówki
+                    Bilans wody i plan
                   </button>
                 </dd>
               </div>

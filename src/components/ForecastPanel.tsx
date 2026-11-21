@@ -1,78 +1,56 @@
 import { cropLabel } from '../data/crops';
 import { formatDateTimePl, todayInPoland } from '../lib/dates';
 import { reportHash } from '../lib/route';
-import type { AnalysisRequest, ForecastAdvice, ForecastDay, WaterForecast } from '../types/analysis';
+import type { AnalysisRequest, ForecastBalance, ForecastStep, IrrigationPlan, WaterForecast } from '../types/analysis';
 import { CropBadge } from './CropPanel';
 import { Icon } from './Icon';
+import { RiskBadge } from './RiskBadge';
 
 const WEEKDAYS = ['niedz.', 'pon.', 'wt.', 'śr.', 'czw.', 'pt.', 'sob.'];
-const LEVEL_TEXT = { low: 'zapas dobry', moderate: 'umiarkowany niedobór', elevated: 'duży niedobór', insufficient_data: 'brak danych' } as const;
-
-function dayLabel(iso: string): { weekday: string; date: string } {
-  const d = new Date(`${iso}T12:00:00Z`);
-  return { weekday: WEEKDAYS[d.getUTCDay()] ?? '', date: `${iso.slice(8, 10)}.${iso.slice(5, 7)}` };
-}
-
-const nf = (v: number | null, digits = 0) => (v === null ? '–' : v.toLocaleString('pl-PL', { maximumFractionDigits: digits }));
+const shortDate = (iso: string) => `${WEEKDAYS[new Date(`${iso}T12:00:00Z`).getUTCDay()]} ${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
+const n = (v: number) => v.toLocaleString('pl-PL');
 
 export function ForecastPanel({ forecast, request, isDemo }: { forecast: WaterForecast | undefined; request: AnalysisRequest; isDemo: boolean }) {
   const crop = cropLabel(request.cropId).toLowerCase();
   return (
     <section className="report-section forecast" aria-labelledby="sekcja-prognoza">
       <h2 id="sekcja-prognoza" tabIndex={-1}>
-        Prognoza i co robić w najbliższych dniach <CropBadge cropId={request.cropId} />
+        Bilans wody na najbliższy tydzień i plan działań
       </h2>
+      <p className="forecast__lead">
+        Ile wody potrzebuje uprawa ({crop}), ile spadnie i ile zostanie w glebie – a z tego, co zrobić i kiedy.{' '}
+        <CropBadge cropId={request.cropId} />
+      </p>
 
       {!forecast || forecast.status !== 'ok' ? (
         <div className="status status--info">
           <p>
             {forecast?.message ??
-              'Prognoza jest dostępna dla działek analizowanych na dzisiejszą datę (przykłady demonstracyjne dotyczą minionych lat).'}
+              'Bilans na najbliższe dni liczymy dla działek analizowanych na dzisiejszą datę (przykłady demonstracyjne dotyczą minionych lat).'}
           </p>
           {!isDemo && (!forecast || forecast.status === 'not_applicable') && (
             <a className="btn btn--small btn--secondary no-print" href={reportHash({ ...request, analysisDate: todayInPoland() })}>
-              <Icon name="cloud" size={16} /> Pokaż prognozę na dziś
+              <Icon name="calendar" size={16} /> Policz bilans na dziś
             </a>
           )}
         </div>
       ) : (
         <>
-          <p className="muted">{forecast.message}</p>
-          {forecast.totals && (
-            <dl className="forecast-totals">
-              <div>
-                <dt>Opad – 3 dni</dt>
-                <dd>{forecast.totals.rain3} mm</dd>
-              </div>
-              <div>
-                <dt>Opad – 7 dni</dt>
-                <dd>{forecast.totals.rain7} mm</dd>
-              </div>
-              <div>
-                <dt>Opad – 10 dni</dt>
-                <dd>{forecast.totals.rain10} mm</dd>
-              </div>
-              <div>
-                <dt>Zużycie wody przez uprawę – 7 dni</dt>
-                <dd>{forecast.days.some((d) => d.etcMm !== null) ? `${forecast.totals.etc7} mm` : '–'}</dd>
-              </div>
-            </dl>
-          )}
+          {forecast.balance && <BalanceSheet balance={forecast.balance} plan={forecast.irrigationPlan} />}
 
-          <h3>Co robić ({crop})</h3>
-          <ul className="forecast-advice">
-            {forecast.advice.map((a) => (
-              <AdviceItem key={a.id} advice={a} />
+          <h3>Co zrobić i kiedy</h3>
+          <ol className="forecast-steps">
+            {forecast.steps.map((step) => (
+              <StepItem key={step.id} step={step} />
             ))}
-          </ul>
+          </ol>
 
-          <h3>Dzień po dniu</h3>
-          <DayStrip days={forecast.days} threshold={forecast.stressThresholdPct} />
+          {forecast.irrigationPlan && forecast.irrigationPlan.events.length > 0 && <IrrigationTable plan={forecast.irrigationPlan} />}
+
           <p className="muted small">
-            Słupki niebieskie – prognozowany opad (mm) i jego prawdopodobieństwo. Pasek na dole – przewidywany zapas wody w strefie
-            korzeni dla tej uprawy{forecast.stressThresholdPct !== null && <>; kreska – próg stresu ({forecast.stressThresholdPct}% zapasu)</>}.
-            Prognoza z {forecast.issuedAt ? formatDateTimePl(forecast.issuedAt) : '–'} (Open-Meteo). Dalsze dni są mniej pewne,
-            szczególnie przy burzach – sprawdzaj prognozę codziennie.
+            {forecast.message} Prognoza opadu i parowania: Open-Meteo, {forecast.issuedAt ? formatDateTimePl(forecast.issuedAt) : '–'}. Bilans
+            liczony modelem FAO-56 od stanu gleby na dzień analizy. Prognoza opadów na dalsze dni jest niepewna (zwłaszcza burze) –
+            plan zmienia się razem z nią, więc sprawdzaj go przed każdym zabiegiem.
           </p>
         </>
       )}
@@ -80,61 +58,125 @@ export function ForecastPanel({ forecast, request, isDemo }: { forecast: WaterFo
   );
 }
 
-function AdviceItem({ advice }: { advice: ForecastAdvice }) {
-  const icon = advice.tone === 'warning' ? 'alert' : advice.tone === 'good' ? 'check' : 'info';
+function BalanceSheet({ balance: b, plan }: { balance: ForecastBalance; plan: IrrigationPlan | null }) {
+  const period = `${shortDate(b.from)} – ${shortDate(b.to)}`;
   return (
-    <li className={`forecast-advice__item forecast-advice__item--${advice.tone}`}>
-      <Icon name={icon} size={20} />
-      <div>
-        <p className="forecast-advice__title">{advice.title}</p>
-        <p>{advice.text}</p>
+    <div className="balance">
+      <p className="balance__title" id="rachunek-wody">
+        Rachunek wody w strefie korzeni, {period} ({b.horizonDays} dni)
+      </p>
+      <table className="balance__table" aria-labelledby="rachunek-wody">
+        <tbody>
+          <tr>
+            <th scope="row">Zapas wody w glebie teraz</th>
+            <td className="balance__sign" />
+            <td className="balance__value">{b.startReserveMm} mm</td>
+            <td className="balance__note">
+              {b.startReservePct}% pełnego zapasu ({b.fullReserveMm} mm)
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">Prognozowany opad</th>
+            <td className="balance__sign">+</td>
+            <td className="balance__value">{b.rainUsedMm} mm</td>
+            <td className="balance__note">
+              z {b.rainMm} mm deszczu{b.rainLostMm > 0 ? ` – ${b.rainLostMm} mm gleba nie zmieści (przesiąknie głębiej lub spłynie)` : ' – całość zostanie w glebie'}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">Potrzeba wody uprawy</th>
+            <td className="balance__sign">−</td>
+            <td className="balance__value">{b.needMm} mm</td>
+            <td className="balance__note">parowanie z gleby i roślin przy obecnej fazie uprawy</td>
+          </tr>
+          <tr className="balance__total">
+            <th scope="row">Zapas za {b.horizonDays} dni (bez nawadniania)</th>
+            <td className="balance__sign">=</td>
+            <td className="balance__value">{b.endReserveMm} mm</td>
+            <td className="balance__note">
+              {b.endReservePct}% pełnego zapasu <RiskBadge level={b.endLevel} />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <dl className="balance__facts">
+        <div>
+          <dt>Próg stresu</dt>
+          <dd>{b.stressThresholdPct}% zapasu</dd>
+        </div>
+        <div>
+          <dt>Dni z niedoborem (bez nawadniania)</dt>
+          <dd>
+            {b.stressDays} z {b.horizonDays}
+          </dd>
+        </div>
+        <div>
+          <dt>Woda do dodania, żeby uniknąć stresu</dt>
+          <dd>
+            {plan && plan.totalMm > 0 ? (
+              <>
+                {plan.totalMm} mm · {n(plan.totalM3PerHa)} m³/ha
+                {plan.totalM3Parcel !== null && <span className="muted small"> · {n(plan.totalM3Parcel)} m³ na działkę</span>}
+              </>
+            ) : (
+              'nie trzeba'
+            )}
+          </dd>
+        </div>
+      </dl>
+      <p className="muted small">
+        Wynik nie zawsze jest prostą sumą – gdy w glebie brakuje wody, rośliny ograniczają parowanie, a nadmiar deszczu nie zostaje w strefie korzeni.
+      </p>
+    </div>
+  );
+}
+
+function StepItem({ step }: { step: ForecastStep }) {
+  const icon = step.tone === 'warning' ? 'alert' : step.tone === 'good' ? 'check' : 'info';
+  return (
+    <li className={`forecast-step forecast-step--${step.tone}`}>
+      <span className="forecast-step__when">{step.when}</span>
+      <div className="forecast-step__body">
+        <p className="forecast-step__title">
+          <Icon name={icon} size={18} /> {step.title}
+        </p>
+        <p>{step.text}</p>
       </div>
     </li>
   );
 }
 
-function DayStrip({ days, threshold }: { days: ForecastDay[]; threshold: number | null }) {
-  const maxRain = Math.max(15, ...days.map((d) => d.precipitationMm ?? 0));
+function IrrigationTable({ plan }: { plan: IrrigationPlan }) {
   return (
-    <div className="forecast-strip" role="table" aria-label="Prognoza dzień po dniu">
-      <div role="rowgroup" className="forecast-strip__days">
-        {days.map((d) => {
-          const label = dayLabel(d.date);
-          const rain = d.precipitationMm ?? 0;
-          return (
-            <div key={d.date} role="row" className={`forecast-day${d.past ? ' forecast-day--past' : ''}`}>
-              <div role="cell" className="forecast-day__date">
-                <strong>{label.weekday}</strong>
-                <span>{label.date}</span>
-                {d.past && <span className="forecast-day__tag">minął</span>}
-              </div>
-              <div role="cell" className="forecast-day__rain" aria-label={`Opad ${nf(d.precipitationMm, 1)} mm`}>
-                <span className="forecast-day__bar" style={{ height: `${Math.max(rain > 0 ? 4 : 0, (rain / maxRain) * 100)}%` }} />
-              </div>
-              <div role="cell" className="forecast-day__mm">
-                {nf(d.precipitationMm, 1)} mm
-                {d.probabilityPct !== null && <span className="muted"> · {d.probabilityPct}%</span>}
-              </div>
-              <div role="cell" className="forecast-day__temp">
-                {nf(d.tMax)}° / {nf(d.tMin)}°
-              </div>
-              <div role="cell" className="forecast-day__reserve" aria-label={d.reservePct === null ? 'Zapas wody: brak danych' : `Zapas wody ${d.reservePct}% – ${LEVEL_TEXT[d.level]}`}>
-                {d.reservePct !== null ? (
-                  <>
-                    <span className="forecast-day__meter">
-                      <span className={`forecast-day__fill forecast-day__fill--${d.level}`} style={{ width: `${d.reservePct}%` }} />
-                      {threshold !== null && <span className="forecast-day__threshold" style={{ left: `${threshold}%` }} />}
-                    </span>
-                    <span className="forecast-day__pct">{d.reservePct}%</span>
-                  </>
-                ) : (
-                  <span className="muted">–</span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+    <div className="table-wrap irrigation-plan">
+      <table className="sources-table">
+        <caption>{plan.typicallyIrrigated ? 'Plan nawadniania' : 'Plan nawadniania (jeśli masz deszczownię)'}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Dzień</th>
+            <th scope="col">Dawka</th>
+            <th scope="col">Woda na hektar</th>
+            <th scope="col">Woda na działkę</th>
+          </tr>
+        </thead>
+        <tbody>
+          {plan.events.map((e) => (
+            <tr key={e.date}>
+              <td>{shortDate(e.date)}</td>
+              <td>{e.doseMm} mm</td>
+              <td>{n(e.m3PerHa)} m³</td>
+              <td>{e.m3Parcel !== null ? `${n(e.m3Parcel)} m³` : '–'}</td>
+            </tr>
+          ))}
+          <tr className="irrigation-plan__total">
+            <th scope="row">Razem</th>
+            <td>{plan.totalMm} mm</td>
+            <td>{n(plan.totalM3PerHa)} m³</td>
+            <td>{plan.totalM3Parcel !== null ? `${n(plan.totalM3Parcel)} m³` : '–'}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }

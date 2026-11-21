@@ -80,7 +80,7 @@ widać przy dzwonku i w menu. Dodane działki, przeczytane powiadomienia i ustaw
     Gdy nie wczytają się kafelki podkładu, pojawia się komunikat, a granice działek dalej są widoczne.
     Formularz i przykłady działają bez mapy.
 - **Raport** (`#/raport?dzialka=…&uprawa=…&data=…`): ma własny adres, więc działa odświeżanie, przycisk „Wstecz” i udostępnianie linku.
-  Raport jest podzielony na zakładki: Podsumowanie, Uprawa, Sytuacja wodna, Prognoza, Co robić, Teren i spływ 3D, Źródła danych
+  Raport jest podzielony na zakładki: Podsumowanie, Uprawa, Sytuacja wodna, Bilans i plan, Co robić, Teren i spływ 3D, Źródła danych
   (strzałki ←/→ przełączają zakładki; na telefonie zakładki są siatką 2 × 3; wydruk zawiera wszystkie zakładki po kolei).
   Teren pobiera się w tle od otwarcia raportu.
   1. **Sytuacja wodna**: ocena na wybrany dzień, wskaźniki z datami obserwacji i oddzielna ocena historycznej podatności działki.
@@ -111,13 +111,15 @@ parametry w `src/data/cropParams.ts`. Raport ma sekcję „Twoja uprawa”: faza
 głębokość korzeni, wrażliwość na suszę, kalendarz sezonu z miesiącami niedoborów i przełącznik do porównania z inną uprawą.
 Wyniki zależne od uprawy mają oznaczenie „Zależy od uprawy”.
 
-**Prognoza (zakładka „Prognoza”):** dla analizy na dziś (lub jeden z 3 ostatnich dni) serwer pobiera z Open-Meteo prognozę
-na 10 dni (opad, prawdopodobieństwo opadu, ET0, Tmax/Tmin) i liczy dalszy ciąg bilansu wody od stanu na dzień analizy –
-przewidywany zapas wody w strefie korzeni dla wybranej uprawy, dzień po dniu (`server/analysis/forecast.ts`).
-Wskazówki wynikają z jawnych reguł: deszcz wystarczy / nie wystarczy na wyjście ze stresu, za ile dni zacznie brakować wody,
-silny opad ≥ 20 mm/dobę (bez oprysków i nawożenia, zatrzymanie wody), przymrozek ≤ 0 °C w młodych fazach, upał ≥ 30 °C,
-okres największej wrażliwości uprawy. Dla warzyw, okopowych i owoców wskazówki mówią o nawadnianiu, dla zbóż i innych upraw
-polowych – o ograniczaniu strat wody. Prognoza nie wpływa na ocenę na dzień analizy.
+**Bilans i plan (zakładka „Bilans i plan”):** dla analizy na dziś (lub jeden z 3 ostatnich dni) serwer pobiera z Open-Meteo
+prognozę na 10 dni (opad, ET0, temperatura) i liczy dalszy ciąg bilansu wody od stanu gleby na dzień analizy
+(`server/analysis/forecast.ts`). Zakładka nie pokazuje pogody dzień po dniu, tylko rachunek na 7 dni:
+zapas wody w glebie teraz + opad, który zostanie w strefie korzeni (nadmiar ponad pojemność gleby jest liczony jako stracony)
+− potrzeba wody uprawy (ETc = Kc · ET0) = zapas za 7 dni, z liczbą dni w stresie. Wariant z nawadnianiem daje plan dawek
+(10–30 mm, co najmniej 3 dni odstępu, bez dawki, gdy w ciągu 2 dni spadnie wystarczająco deszczu) w mm, m³/ha i m³ na działkę.
+Kroki „Co zrobić i kiedy” są ułożone chronologicznie: nawadnianie albo jego wstrzymanie, ograniczanie strat wody dla upraw
+zwykle nienawadnianych (zboża, oleiste, strączkowe, pastewne), silny opad ≥ 20 mm/dobę (bez oprysków i nawożenia, zatrzymanie
+wody), przymrozek ≤ 0 °C w młodych fazach, upał ≥ 30 °C, okres największej wrażliwości uprawy. Bilans nie wpływa na ocenę na dzień analizy.
 
 **Model (FAO-56, dzienny bilans wody w strefie korzeni):**
 - start 1 marca z pełnym zapasem (gleba po zimie zwykle jest w polowej pojemności wodnej);

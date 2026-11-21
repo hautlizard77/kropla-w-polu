@@ -185,25 +185,52 @@ export interface DataSource {
   details: string | null;
 }
 
-/** Jeden dzień prognozy z przewidywanym zapasem wody w glebie dla wybranej uprawy. */
-export interface ForecastDay {
-  date: IsoDate;
-  /** true – dzień przed dniem dzisiejszym (dane modelowe z ostatnich dni), false – prognoza. */
-  past: boolean;
-  precipitationMm: number | null;
-  probabilityPct: number | null;
-  et0Mm: number | null;
-  /** Zużycie wody przez uprawę (ETc), mm. */
-  etcMm: number | null;
-  tMax: number | null;
-  tMin: number | null;
-  /** Przewidywany zapas wody dostępnej w strefie korzeni, % pełnego zapasu. */
-  reservePct: number | null;
-  level: RiskLevel;
+/** Rachunek wody w strefie korzeni na najbliższe dni (z prognozy opadu i parowania). Wartości w mm. */
+export interface ForecastBalance {
+  horizonDays: number;
+  from: IsoDate;
+  to: IsoDate;
+  /** Woda dostępna dla roślin w strefie korzeni na początku okresu. */
+  startReserveMm: number;
+  startReservePct: number;
+  /** Pełny zapas (TAW) i poziom, poniżej którego roślina ogranicza wzrost (% pełnego zapasu). */
+  fullReserveMm: number;
+  stressThresholdPct: number;
+  /** Ile wody zużyłaby uprawa bez niedoboru (ETc = Kc · ET0). */
+  needMm: number;
+  rainMm: number;
+  /** Część opadu, która zostanie w strefie korzeni. */
+  rainUsedMm: number;
+  /** Część opadu ponad pojemność gleby – przesiąknie głębiej lub spłynie. */
+  rainLostMm: number;
+  endReserveMm: number;
+  endReservePct: number;
+  endLevel: RiskLevel;
+  /** Dni w okresie z zapasem poniżej progu stresu (bez nawadniania). */
+  stressDays: number;
 }
 
-export interface ForecastAdvice {
+export interface IrrigationEvent {
+  date: IsoDate;
+  doseMm: number;
+  m3PerHa: number;
+  m3Parcel: number | null;
+}
+
+export interface IrrigationPlan {
+  events: IrrigationEvent[];
+  totalMm: number;
+  totalM3PerHa: number;
+  totalM3Parcel: number | null;
+  /** Czy uprawę zwykle się nawadnia (warzywa, okopowe, owoce). */
+  typicallyIrrigated: boolean;
+  horizonDays: number;
+}
+
+export interface ForecastStep {
   id: string;
+  /** Kiedy: „Teraz”, „pt. 14.06”, „Od pt. 14.06”… */
+  when: string;
   tone: 'good' | 'info' | 'warning';
   title: string;
   text: string;
@@ -213,11 +240,9 @@ export interface WaterForecast {
   status: 'ok' | 'not_applicable' | 'unavailable';
   message: string;
   issuedAt: IsoDateTime | null;
-  /** Próg stresu (łatwo dostępna woda) w % zapasu – linia na wykresie. */
-  stressThresholdPct: number | null;
-  days: ForecastDay[];
-  advice: ForecastAdvice[];
-  totals: { rain3: number; rain7: number; rain10: number; etc7: number } | null;
+  balance: ForecastBalance | null;
+  irrigationPlan: IrrigationPlan | null;
+  steps: ForecastStep[];
   sourceId: string | null;
 }
 

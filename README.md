@@ -33,6 +33,9 @@ npm run build      # sprawdzenie typów i build produkcyjny do dist/
 npm run preview    # podgląd zbudowanej wersji
 ```
 
+Każdy push na `main` jest sprawdzany w GitHub Actions (typy + build), a gotowa zbudowana wersja trafia na gałąź
+**`dist`** – można ją wystawić na dowolnym hostingu statycznym (np. GitHub Pages z gałęzi `dist`).
+
 Zbudowana aplikacja (`dist/`) to statyczne pliki z względnymi ścieżkami (`base: './'`), więc można ją umieścić
 na dowolnym hostingu statycznym. Rolnik nie musi niczego instalować, wystarczy przeglądarka.
 
@@ -165,7 +168,7 @@ Aplikacja w tej wersji nie korzysta z modeli AI w czasie działania.
 - Nawadnianie: tylko miejsce w modelu raportu, bez dawek i terminów.
 - Walidacja identyfikatora sprawdza tylko format (`WWPPGG_R.OOOO[.AR_n].NR[/NR]`), a nie to, czy działka istnieje.
 - Mapa interaktywna wymaga internetu (kafelki OSM). Bez nich działa stan awaryjny.
-- Brak testów automatycznych w repozytorium. CI (GitHub Actions) sprawdza typy i build; ścieżki interfejsu sprawdzono skryptem przeglądarkowym (Playwright) poza repozytorium.
+- Brak testów automatycznych w repozytorium. CI (GitHub Actions) sprawdza typy i build; ścieżki interfejsu (demo, zmiana działki, brak danych, błąd, wydruk, układ mobilny, wybór działki na mapie Leaflet) sprawdzono skryptem Playwright poza repozytorium.
 
 ## Weryfikacja wyników
 

@@ -12,7 +12,7 @@ Rolnik wskazuje działkę ewidencyjną, wybiera uprawę i datę analizy. W odpow
 > **Stan:** dla **dowolnej działki w Polsce** aplikacja pobiera granicę z ULDK, Numeryczny Model Terenu z Geoportalu
 > i sceny Sentinel-2, liczy spływ i NDMI oraz wskazuje obszar do sprawdzenia pod kątem retencji („Teren i spływ 3D”).
 > Ocena niedoboru wody na wybrany dzień, historia 10 sezonów i zalecenia też są liczone dla każdej działki – z pogody
-> (Open-Meteo / NASA POWER), gleby (ISRIC SoilGrids) i cieków (OpenStreetMap). Trzy **jawnie oznaczone przykłady demonstracyjne**
+> (Open-Meteo / NASA POWER), gleby (ISRIC SoilGrids) i cieków (MPHP10 Wód Polskich + OpenStreetMap). Trzy **jawnie oznaczone przykłady demonstracyjne**
 > zostały jako tryb pokazowy bez internetu.
 
 Opis zadania: [`docs/zadanie-KOWR-HackNation-2026.pdf`](docs/zadanie-KOWR-HackNation-2026.pdf) ·
@@ -103,7 +103,7 @@ Granica z ULDK daje środek działki, a dla niego pobierane są równolegle trzy
 |---|---|---|
 | Pogoda dzienna, 10 lat wstecz | 1. Open-Meteo Archive (ERA5) → 2. NASA POWER (gdy Open-Meteo odmówi, np. limit 429; ET0 liczymy sami wzorem FAO-56 Penman–Monteith) → 3. Open-Meteo Forecast `past_days` uzupełnia ostatnie dni | opad, ET0, opad 30 dni i klimatyczny bilans wodny 60 dni na tle średniej 10 lat |
 | Gleba | ISRIC SoilGrids 2.0 (WCS, 250 m): piasek, ił, węgiel organiczny w 6 warstwach do 2 m | uziarnienie, kategoria gleby, θFC i θWP wzorami Saxton & Rawls (2006), woda dostępna TAW w strefie korzeni |
-| Cieki i rowy | OpenStreetMap przez Overpass API (2 serwery zapasowe), promień 300 m | najbliższy ciek/rów i odległość od działki – podstawa zalecenia o zatrzymaniu wody w rowie |
+| Cieki i rowy | MPHP10 PGW Wody Polskie (WMS ISOK, GetFeatureInfo) + OpenStreetMap (Overpass, rowy spoza MPHP), promień 300 m | najbliższy ciek/rów i odległość od działki – podstawa zalecenia o zatrzymaniu wody w rowie |
 
 **Uprawy:** 27 upraw w 7 grupach (zboża, okopowe, oleiste, strączkowe, pastewne i użytki zielone, warzywa, owoce i sady),
 parametry w `src/data/cropParams.ts`. Raport ma sekcję „Twoja uprawa”: faza na dzień analizy, zapotrzebowanie na wodę,
@@ -276,7 +276,7 @@ Adres usługi ustawia się zmienną `VITE_ANALYSIS_API_URL`, np. w pliku `.env.l
 | Podkład mapy OpenStreetMap | tak – kafelki pobierane w przeglądarce | przy każdym wyświetleniu |
 | Pogoda – Open-Meteo / NASA POWER | tak, przy analizie działki; zakresy starsze niż 10 dni z bufora | zakres dat i ostatni pełny dzień |
 | Gleba – ISRIC SoilGrids 2.0 | tak, przy analizie działki, potem z bufora | data pobrania; mapa modelowa (wersja 2.0) |
-| Cieki i rowy – OpenStreetMap (Overpass) | tak, przy analizie działki | data pobrania; gdy serwer nie odpowie – „Brak danych” |
+| Cieki i rowy – MPHP10 Wód Polskich + OpenStreetMap | tak, przy analizie działki | data pobrania; „Brak danych” tylko gdy oba źródła nie odpowiedzą |
 
 Spływ, zastoiska, nachylenie, obszar do sprawdzenia i NDMI **liczy aplikacja** z pobranych danych (pkt 4.2 opisu zadania).
 Ocenę niedoboru wody, historię i zalecenia aplikacja liczy z pogody, gleby i hydrologii (sekcja „Ocena wody dla dowolnej działki”).
@@ -298,7 +298,8 @@ Ocenę niedoboru wody, historię i zalecenia aplikacja liczy z pogody, gleby i h
 | MET Norway – Locationforecast 2.0 | prognoza zapasowa (gdy Open-Meteo zwróci np. 429) | CC BY 4.0; wymagany identyfikujący User-Agent; ET0 liczone w aplikacji (FAO-56, promieniowanie z zachmurzenia) |
 | NASA POWER (LaRC) | pogoda zapasowa | dane publiczne NASA, wymagane przypisanie źródła |
 | ISRIC SoilGrids 2.0 | gleba | CC BY 4.0 |
-| OpenStreetMap przez Overpass API | cieki i rowy | ODbL; publiczne serwery Overpass mają limity i bywają przeciążone |
+| PGW Wody Polskie – MPHP10, WMS `wody.isok.gov.pl/gpservices/KZGW/ISOK_MPHP/MapServer/WMSServer` | cieki (nazwa, charakter, szerokość, okresowość) | dane publiczne PGW Wody Polskie (Hydroportal ISOK); odpowiedź bez geometrii |
+| OpenStreetMap przez Overpass API | drobne rowy melioracyjne | ODbL; publiczne serwery Overpass mają limity i bywają przeciążone |
 
 Odwzorowania kartograficzne, czytnik GeoTIFF, algorytmy hydrologiczne i renderer 3D są napisane w tym repozytorium
 (bez proj4, GDAL, GRASS ani three.js).
@@ -310,9 +311,10 @@ Aplikacja nie korzysta z modeli AI w czasie działania – wszystkie wyniki licz
 
 - Ocena wody to model: start 1 marca z pełnym zapasem, typowy kalendarz uprawy, pogoda z siatki reanalizy (ok. 10–50 km), bez podsiąku wód gruntowych i bez nawadniania wykonanego przez rolnika.
 - SoilGrids to mapa modelowa 250 m – na konkretnym polu gleba może się różnić; docelowo mapy glebowo-rolnicze IUNG-PIB.
-- Cieki pochodzą z OpenStreetMap (niekompletne dla małych rowów). MPHP Wód Polskich wymaga autoryzacji, więc nie jest używana.
-  Serwery Overpass bywają niedostępne: pytamy 3 naraz z limitem 4 s, a po porażce przez 15 min nie pytamy ponownie o tę działkę –
-  wtedy raport pokazuje „Brak danych” o ciekach, a reszta oceny działa.
+- Cieki pochodzą z MPHP10 Wód Polskich (publiczny WMS ISOK, warstwa „Odcinki cieków”). GetFeatureInfo nie zwraca geometrii,
+  więc odległość to górna granica z pierścieni 50/100/300 m wokół prostokąta działki („do 50 m”). Drobne rowy melioracyjne,
+  których MPHP nie ma, uzupełniamy z OpenStreetMap (odległość dokładna; ten sam ciek z OSM doprecyzowuje odległość z MPHP).
+  Oba źródła pytamy równolegle; gdy oba zawiodą, przez 15 min nie pytamy ponownie o tę działkę, a raport pokazuje „Brak danych”.
 - Open-Meteo ma dzienny limit zapytań z jednego adresu – wtedy działa NASA POWER (opóźnienie danych kilka dni, uzupełniane prognozą Open-Meteo).
 - Warstwa erozji pokazuje samo nachylenie (bez opadu i pokrycia).
 - Analiza topografii nie uwzględnia opadu, infiltracji, drenażu, przepustów ani rowów pod drogami. Nie liczymy głębokości zalania.

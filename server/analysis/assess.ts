@@ -15,7 +15,7 @@ import type {
   RiskLevel,
 } from '../../src/types/analysis';
 import type { ParcelInfo, SourceInfo } from '../../src/types/terrain';
-import type { HydroResult } from '../sources/hydro';
+import { distanceText, type HydroResult } from '../sources/hydro';
 import type { SoilProfile } from '../sources/soil';
 import { addDays, type ForecastSeries, type WeatherSeries } from '../sources/weather';
 import { FORECAST_MAX_AGE_DAYS, FORECAST_SOURCE_ID, buildForecast, notApplicableForecast, unavailableForecast } from './forecast';
@@ -187,7 +187,7 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
     dataSources.push(missingSource('gleba', 'gleba', 'Tekstura i retencja gleby', soil?.missing.join(' ') || 'Usługa SoilGrids niedostępna.'));
   }
   if (hydro?.status === 'ok') {
-    dataSources.push(toDataSource('hydro', 'hydrologia', hydro.source, { license: 'ODbL', details: hydro.message }));
+    dataSources.push(toDataSource('hydro', 'hydrologia', hydro.source, { license: hydro.license || 'ODbL', details: hydro.message }));
   } else {
     dataSources.push(missingSource('hydro', 'hydrologia', 'Cieki i rowy w pobliżu', hydro?.message ?? 'Brak danych.'));
   }
@@ -398,12 +398,12 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
     recommendations.push({
       id: 'rec-row',
       category: 'retencja',
-      title: `Sprawdź możliwość spowolnienia odpływu w pobliskim ${w.kind === 'rzeka' || w.kind === 'strumień' ? 'cieku' : 'rowie'}`,
+      title: `Sprawdź możliwość spowolnienia odpływu w pobliskim ${w.kind.startsWith('rów') ? 'rowie' : w.kind === 'kanał' ? 'kanale' : 'cieku'}`,
       action:
         w.kind === 'rów' || w.kind === 'rów odwadniający'
           ? 'Rozważ zastawkę lub próg na rowie i spiętrzanie wody wczesną wiosną, zanim odpłyną wody roztopowe.'
           : 'Rozważ działania spowalniające odpływ (np. pas zadrzewień lub zadarnienia przy cieku); budowle na cieku wymagają zgody Wód Polskich.',
-      rationale: `${w.distanceM === 0 ? 'Przez działkę przebiega' : `W odległości ok. ${w.distanceM} m od działki przebiega`} ${w.kind}${w.name ? ` (${w.name})` : ''}. ${
+      rationale: `${w.distanceM === 0 ? 'Przez działkę przebiega' : `W odległości ${distanceText(w)} od działki przebiega`} ${w.kind}${w.name ? ` (${w.name})` : ''}${w.details ? `, ${w.details}` : ''} – wg ${w.origin === 'mphp' ? 'MPHP10 Wód Polskich' : 'OpenStreetMap'}. ${
         deficitSeasons > 0 ? `W ${deficitSeasons} z ${seasonsCounted} ostatnich sezonów uprawie brakowało wody.` : ''
       }`,
       evidenceSourceIds: ['hydro', 'pogoda0'],
@@ -411,7 +411,7 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
         'Kto jest właścicielem i zarządcą rowu lub cieku (spółka wodna, gmina, Wody Polskie)?',
         'Czy potrzebne jest zgłoszenie wodnoprawne lub pozwolenie?',
         'Czy spiętrzenie nie podtopi sąsiednich działek, dróg ani drenażu?',
-        'Dane o rowach pochodzą z OpenStreetMap – potwierdź przebieg w terenie.',
+        'Potwierdź przebieg rowu w terenie – mapy (MPHP, OpenStreetMap) nie zawsze są aktualne.',
       ],
       suggestedArea: null,
     });

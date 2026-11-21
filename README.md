@@ -122,8 +122,8 @@ każde podaje uzasadnienie z liczbami. Wyniki są buforowane (pamięć + `.cache
 
 ## Teren i spływ 3D
 
-Przycisk **„Teren i spływ 3D”** w raporcie otwiera sekcję z analizą topografii działki. Moduł (WebGL) ładuje się
-dopiero po kliknięciu, więc raport otwiera się niezależnie od niego.
+Sekcja **„Teren i spływ”** z analizą topografii działki generuje się w raporcie od razu, bez klikania. Moduł (WebGL)
+jest osobnym plikiem ładowanym równolegle, więc reszta raportu pokazuje się bez czekania na niego.
 
 **Przepływ danych (serwer, EPSG:2180):**
 

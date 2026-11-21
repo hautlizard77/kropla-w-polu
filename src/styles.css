@@ -1771,6 +1771,13 @@ a:hover {
   margin-top: 1.25rem;
 }
 
+.report-actions--end {
+  justify-content: flex-end;
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
 .report-section {
   padding: 2rem 0 0.5rem;
   margin-top: 1.5rem;

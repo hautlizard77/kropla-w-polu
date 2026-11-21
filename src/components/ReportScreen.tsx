@@ -149,7 +149,7 @@ export function ReportScreen({ request, cachedResult, onChangeParcel, simulateEr
     );
   }
 
-  return <Report result={state.result} headingRef={headingRef} onChangeParcel={onChangeParcel} />;
+  return <Report result={state.result} headingRef={headingRef} />;
 }
 
 function RequestSummary({ request }: { request: AnalysisRequest }) {
@@ -174,11 +174,9 @@ function RequestSummary({ request }: { request: AnalysisRequest }) {
 function Report({
   result,
   headingRef,
-  onChangeParcel,
 }: {
   result: AnalysisResult;
   headingRef: RefObject<HTMLHeadingElement | null>;
-  onChangeParcel: () => void;
 }) {
   const sourcesById = useMemo(() => new Map(result.dataSources.map((source) => [source.id, source])), [result]);
   const highlights = useMemo(
@@ -192,7 +190,6 @@ function Report({
   const { parcel, request, currentState, historicalVulnerability } = result;
   const retention = result.recommendations.filter((rec) => rec.category === 'retencja');
   const agro = result.recommendations.filter((rec) => rec.category === 'agrotechnika');
-  const [showTerrain, setShowTerrain] = useState(false);
   const cropToday = cropDay(request.cropId, request.analysisDate);
   const cropStageText = cropToday.inSeason ? STAGE_LABELS[cropToday.stage] : 'poza sezonem uprawy';
   const goTo = (id: string) => {
@@ -200,10 +197,7 @@ function Report({
     heading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     heading?.focus({ preventScroll: true });
   };
-  const openTerrain = () => {
-    setShowTerrain(true);
-    window.setTimeout(() => document.getElementById('teren-i-splyw')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
-  };
+  const openTerrain = () => goTo('teren-i-splyw');
 
   return (
     <article className="report" aria-labelledby="tytul-raportu">
@@ -228,17 +222,6 @@ function Report({
           {parcel.areaHa !== null && <> · {parcel.areaHa.toLocaleString('pl-PL')} ha</>} · wygenerowano{' '}
           {formatDateTimePl(result.generatedAt)}
         </p>
-        <div className="report-actions no-print">
-          <button type="button" className="btn btn--secondary" onClick={onChangeParcel}>
-            Zmień działkę
-          </button>
-          <button type="button" className="btn btn--secondary" onClick={openTerrain} aria-expanded={showTerrain} aria-controls="teren-i-splyw">
-            <Icon name="parcels" size={18} /> Teren i spływ 3D
-          </button>
-          <button type="button" className="btn btn--primary" onClick={() => window.print()}>
-            <Icon name="printer" size={18} /> Drukuj lub zapisz PDF
-          </button>
-        </div>
       </header>
 
       <div className="report-overview">
@@ -367,11 +350,6 @@ function Report({
               Brak zaleceń – bez danych pogodowych i glebowych nie da się ich rzetelnie uzasadnić. Ukształtowanie terenu, spływ
               i obszar do sprawdzenia pod kątem retencji pokazuje sekcja „Teren i spływ”.
             </p>
-            {!showTerrain && (
-              <button type="button" className="btn btn--small btn--secondary no-print" onClick={openTerrain}>
-                Otwórz „Teren i spływ 3D”
-              </button>
-            )}
           </div>
         ) : (
           <div className="recommendations-layout">
@@ -419,19 +397,17 @@ function Report({
         </div>
       </section>
 
-      {showTerrain && (
-        <LoadBoundary>
-          <Suspense
-            fallback={
-              <p className="status status--loading" role="status">
-                Wczytuję moduł „Teren i spływ”…
-              </p>
-            }
-          >
-            <TerrainPanel parcelId={parcel.id} analysisDate={request.analysisDate} />
-          </Suspense>
-        </LoadBoundary>
-      )}
+      <LoadBoundary>
+        <Suspense
+          fallback={
+            <p className="status status--loading" role="status">
+              Wczytuję moduł „Teren i spływ”…
+            </p>
+          }
+        >
+          <TerrainPanel parcelId={parcel.id} analysisDate={request.analysisDate} />
+        </Suspense>
+      </LoadBoundary>
 
       {/* 3. Na czym opiera się wynik */}
       <section className="report-section" aria-labelledby="sekcja-dane">
@@ -491,6 +467,12 @@ function Report({
           nie jest późniejsza niż data analizy. Data pobrania to moment, w którym system pobrał dane.
         </p>
       </section>
+
+      <div className="report-actions report-actions--end no-print">
+        <button type="button" className="btn btn--primary" onClick={() => window.print()}>
+          <Icon name="printer" size={18} /> Drukuj lub zapisz PDF
+        </button>
+      </div>
     </article>
   );
 }

@@ -2107,6 +2107,283 @@ details > summary:hover {
 }
 
 /* ================================================================== */
+/* Teren i spływ                                                        */
+/* ================================================================== */
+
+.terrain .section-number {
+  background: var(--blue-700);
+}
+
+.report-section > h2 .tag {
+  margin-left: 0.35rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.data-note--demo {
+  background: var(--risk-moderate-bg);
+  color: #4f3600;
+}
+
+.terrain-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.terrain-toolbar .segmented {
+  margin: 0;
+}
+
+.terrain-layers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.terrain-layers label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+
+.terrain-layers input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--blue-700);
+}
+
+.terrain-layout {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (min-width: 1100px) {
+  .terrain-layout {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    align-items: start;
+  }
+}
+
+.terrain-3d {
+  position: relative;
+}
+
+.terrain-canvas {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--gray-50);
+}
+
+.terrain-3d .terrain-canvas {
+  height: min(62vh, 560px);
+  min-height: 340px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.terrain-3d .terrain-canvas:active {
+  cursor: grabbing;
+}
+
+.terrain-3d__controls {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+  max-width: 70%;
+}
+
+.terrain-3d__controls .icon-button {
+  font-size: 1.15rem;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgb(13 27 42 / 0.15);
+}
+
+.terrain-3d__controls .btn {
+  background: var(--white);
+  box-shadow: 0 1px 3px rgb(13 27 42 / 0.15);
+}
+
+.terrain-3d__hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.terrain-2d--print-only {
+  display: none;
+}
+
+.terrain-side {
+  display: grid;
+  gap: 1rem;
+}
+
+.terrain-legend h3,
+.ndmi-info h3 {
+  font-size: 1rem;
+}
+
+.legend-list {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+}
+
+.legend-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.swatch {
+  width: 1.1rem;
+  height: 0.9rem;
+  flex: none;
+  border-radius: 2px;
+  border: 1px solid rgb(13 27 42 / 0.25);
+}
+
+.swatch--line {
+  height: 0.3rem;
+  border: 0;
+}
+
+.gradient-bar {
+  height: 0.75rem;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+}
+
+.gradient-labels {
+  display: flex;
+  justify-content: space-between;
+  margin: 0.2rem 0 0.5rem;
+  color: var(--text-muted);
+}
+
+.ndmi-info {
+  padding: 1rem;
+  border-radius: var(--radius);
+  background: var(--gray-50);
+}
+
+.ndmi-info .tag {
+  margin-bottom: 0.5rem;
+}
+
+.ndmi-info .status {
+  margin-top: 0.5rem;
+}
+
+.retention-card {
+  margin-top: 1.5rem;
+  border: 1px solid #f0c98a;
+  border-left: 5px solid #e07b00;
+  border-radius: var(--radius);
+  background: #fffaf2;
+  padding: 1.1rem 1.25rem;
+}
+
+.retention-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.retention-card__head h3 {
+  margin: 0;
+}
+
+.retention-card__head .eyebrow {
+  color: #9a5400;
+  margin-bottom: 0.15rem;
+}
+
+.retention-card__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: #e07b00;
+  color: var(--white);
+  flex: none;
+}
+
+.retention-card__body {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 900px) {
+  .retention-card__body {
+    grid-template-columns: 3fr 2fr;
+  }
+}
+
+.retention-card__reasons {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.retention-card__reasons li + li {
+  margin-top: 0.35rem;
+}
+
+.terrain-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+  list-style: none;
+  margin: 1.25rem 0;
+  padding: 0;
+}
+
+.terrain-facts li {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.terrain-facts__value {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.terrain-details {
+  margin-top: 1rem;
+}
+
+.terrain-details h4 {
+  margin-top: 1rem;
+}
+
+/* ================================================================== */
 /* Telefon                                                              */
 /* ================================================================== */
 
@@ -2199,8 +2476,25 @@ details > summary:hover {
     display: none !important;
   }
 
-  .print-only {
+  .print-only,
+  .terrain-2d--print-only {
     display: block;
+  }
+
+  .terrain-layout {
+    display: block;
+  }
+
+  .retention-card,
+  .terrain-facts,
+  .terrain-canvas--2d {
+    break-inside: avoid;
+  }
+
+  .retention-card,
+  .data-note--demo {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .print-brand {

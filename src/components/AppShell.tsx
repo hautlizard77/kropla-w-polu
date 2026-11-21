@@ -52,7 +52,7 @@ export function AppShell({
         <a className="sidebar__brand" href={HASH.dashboard}>
           <BrandMark />
           <span>
-            <span className="sidebar__name">Woda na polu</span>
+            <span className="sidebar__name">Kropla w Polu</span>
             <span className="sidebar__tagline">Gospodarowanie wodą na działce</span>
           </span>
         </a>
@@ -88,12 +88,12 @@ export function AppShell({
 
       <div className="shell__main">
         <header className="topbar no-print">
-          <a className="topbar__brand" href={HASH.dashboard} aria-label="Woda na polu – panel główny">
+          <a className="topbar__brand" href={HASH.dashboard} aria-label="Kropla w Polu – panel główny">
             <BrandMark />
           </a>
           <p className="topbar__section">
             {current && <Icon name={current.icon} size={18} />}
-            <span>{current?.label ?? 'Woda na polu'}</span>
+            <span>{current?.label ?? 'Kropla w Polu'}</span>
           </p>
           <div className="topbar__actions">
             <a
@@ -122,7 +122,7 @@ export function AppShell({
         </main>
 
         <footer className="app-footer no-print">
-          <span>Woda na polu</span>
+          <span>Kropla w Polu</span>
           <span aria-hidden="true">·</span>
           <span>Źródła i daty danych są podane w każdym raporcie</span>
         </footer>

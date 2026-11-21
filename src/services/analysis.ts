@@ -1,15 +1,18 @@
 /**
  * Jedno wejście do analizy działki.
  *
- * Teraz: czyta scenariusze demonstracyjne (src/data/demoScenarios.ts).
- * Docelowo: wywoła API silnika analizy (patrz `fetchAnalysisFromApi` i README → „Podłączenie API”).
+ * Działki z trybu demonstracyjnego: wynik ze scenariuszy (src/data/demoScenarios.ts), wyraźnie oznaczony.
+ * Pozostałe działki: granica z ULDK przez serwer aplikacji i rzeczywisty stan dostępnych danych – bez wymyślonej diagnozy.
+ * Docelowo: pełna ocena z API silnika analizy (patrz `fetchAnalysisFromApi` i README → „Podłączenie API”).
  *
  * Komponenty widoków tylko renderują wynik – nie wyliczają wskaźników ani nie wybierają zaleceń.
  */
 import { cropLabel } from '../data/crops';
 import { DEMO_SCENARIOS, type DemoScenario } from '../data/demoScenarios';
 import { compareIsoDates, formatDatePl } from '../lib/dates';
-import type { AnalysisOutcome, AnalysisRequest, AnalysisResult } from '../types/analysis';
+import type { AnalysisOutcome, AnalysisRequest, AnalysisResult, DataSource } from '../types/analysis';
+import type { ParcelInfo } from '../types/terrain';
+import { ApiUnavailableError, fetchParcel } from './terrain';
 
 /** Błąd techniczny (np. brak połączenia) – w odróżnieniu od braku analizy dla danych wejściowych. */
 export class AnalysisError extends Error {
@@ -34,8 +37,114 @@ export async function analyzeParcel(request: AnalysisRequest, options: AnalyzeOp
     throw new AnalysisError('Nie udało się połączyć z usługą analizy. Sprawdź połączenie z internetem i spróbuj ponownie.');
   }
 
-  // Punkt podłączenia przyszłego API: zamień poniższe wywołanie na `fetchAnalysisFromApi(request, options.signal)`.
-  return analyzeWithDemoScenarios(request);
+  // Punkt podłączenia przyszłego API: zamień poniższe wywołania na `fetchAnalysisFromApi(request, options.signal)`.
+  const isDemoParcel = DEMO_SCENARIOS.some((scenario) => scenario.request.parcelId === request.parcelId);
+  if (isDemoParcel) return analyzeWithDemoScenarios(request);
+  return analyzeObservedParcel(request);
+}
+
+/** Działka spoza trybu demo: granica z ULDK i uczciwy stan danych. */
+async function analyzeObservedParcel(request: AnalysisRequest, now: Date = new Date()): Promise<AnalysisOutcome> {
+  let lookup;
+  try {
+    lookup = await fetchParcel(request.parcelId);
+  } catch (error) {
+    throw new AnalysisError(error instanceof ApiUnavailableError ? error.message : 'Nie udało się pobrać danych działki.');
+  }
+  if (lookup.status === 'not_found') {
+    return { status: 'unavailable', unavailable: { reason: 'unknown_parcel', message: lookup.message, hint: null } };
+  }
+  if (lookup.status === 'error') throw new AnalysisError(lookup.message);
+  return { status: 'ok', result: observedResult(request, lookup.parcel, now) };
+}
+
+export function observedResult(request: AnalysisRequest, parcel: ParcelInfo, now: Date = new Date()): AnalysisResult {
+  const ring = [...parcel.ringWgs84, parcel.ringWgs84[0] as [number, number]];
+  const onDemand = (kind: DataSource['kind'], id: string, name: string, provider: string, url: string, details: string): DataSource => ({
+    id,
+    kind,
+    name,
+    provider,
+    url,
+    license: null,
+    availability: 'available',
+    observationDate: null,
+    retrievedAt: null,
+    coverage: null,
+    limitations: [],
+    details,
+  });
+  const missing = (kind: DataSource['kind'], id: string, name: string): DataSource => ({
+    id,
+    kind,
+    name,
+    provider: 'nie podłączono w tej wersji',
+    url: null,
+    license: null,
+    availability: 'missing',
+    observationDate: null,
+    retrievedAt: null,
+    coverage: null,
+    limitations: ['Źródło nie jest jeszcze podłączone – brak danych do oceny.'],
+    details: null,
+  });
+  return {
+    request,
+    isDemo: false,
+    scenarioId: null,
+    generatedAt: now.toISOString(),
+    parcel: {
+      id: parcel.id,
+      locationLabel: parcel.region ? `obręb ${parcel.region}` : 'obręb nieznany',
+      commune: parcel.commune ?? 'nieznana',
+      county: parcel.county ?? 'nieznany',
+      voivodeship: parcel.voivodeship ?? 'nieznane',
+      areaHa: Math.round(parcel.areaHa * 100) / 100,
+      geometry: { type: 'Polygon', coordinates: [ring] },
+    },
+    currentState: {
+      asOf: request.analysisDate,
+      level: 'insufficient_data',
+      headline: 'Za mało danych do oceny stresu wodnego',
+      summary:
+        'Dla tej działki nie są jeszcze podłączone dane pogodowe i glebowe, dlatego nie oceniamy niedoboru wody na wybrany dzień. ' +
+        'Ukształtowanie terenu, spływ i wskaźnik NDMI z Sentinel-2 sprawdzisz w sekcji „Teren i spływ”.',
+      indicators: [],
+    },
+    historicalVulnerability: {
+      level: 'insufficient_data',
+      headline: 'Za mało danych',
+      summary: 'Ocena podatności wymaga 10 lat danych pogodowych i danych glebowych, które nie są jeszcze podłączone.',
+      period: null,
+      criticalMonths: [],
+      indicators: [],
+    },
+    recommendations: [],
+    irrigation: { status: 'not_calculated', note: 'W tej wersji nie wyliczamy dawek ani terminów nawadniania.' },
+    dataSources: [
+      {
+        ...parcel.source,
+        id: 'uldk',
+        kind: 'granice',
+        license: 'Dane publiczne GUGiK',
+        availability: 'available',
+        observationDate: null,
+        retrievedAt: parcel.source.retrievedAt ? parcel.source.retrievedAt.slice(0, 10) : null,
+        coverage: null,
+        limitations: parcel.source.notes,
+        details: `Powierzchnia z geometrii: ${parcel.areaHa.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} ha.`,
+      },
+      onDemand('teren', 'nmt', 'Numeryczny Model Terenu', 'GUGiK – Geoportal (WCS)', 'https://www.geoportal.gov.pl', 'Pobierany na żądanie w sekcji „Teren i spływ”.'),
+      onDemand('satelita', 's2', 'Sentinel-2 L2A – NDMI', 'Copernicus / Earth Search', 'https://earth-search.aws.element84.com/v1', 'Pobierany na żądanie (przełącznik NDMI w sekcji „Teren i spływ”).'),
+      missing('pogoda', 'pogoda', 'Opady i klimatyczny bilans wodny'),
+      missing('gleba', 'gleba', 'Gleba i jej podatność na suszę'),
+      missing('hydrologia', 'hydro', 'Cieki, rowy i zbiorniki'),
+    ],
+    limitations: [
+      'Ocena niedoboru wody wymaga danych pogodowych i glebowych, które nie są jeszcze podłączone dla dowolnej działki.',
+      'Granica działki pochodzi z ULDK; teren i NDMI są pobierane z rzeczywistych usług na żądanie.',
+    ],
+  };
 }
 
 /** Znajduje scenariusz demo dokładnie pasujący do zapytania. Inne zestawy danych nie dostają analizy. */

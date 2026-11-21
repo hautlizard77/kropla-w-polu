@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { Component, Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { cropLabel } from '../data/crops';
 import { formatDatePl, formatDateTimePl, formatMonthsPl, formatRangePl } from '../lib/dates';
 import { AVAILABILITY_LABELS, CATEGORY_LABELS, DATA_KIND_LABELS } from '../lib/labels';
@@ -18,6 +18,26 @@ import { Steps } from './Layout';
 import { ParcelMap, type MapParcel } from './ParcelMap';
 import { RiskBadge } from './RiskBadge';
 import { SchematicMap } from './SchematicMap';
+
+/** Moduł 3D ładowany dopiero po kliknięciu – raport otwiera się bez niego. */
+const TerrainPanel = lazy(() => import('./terrain/TerrainPanel'));
+
+class LoadBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (this.state.failed) {
+      return (
+        <p className="status status--error" role="alert">
+          Nie udało się wczytać modułu „Teren i spływ”. Odśwież stronę i spróbuj ponownie – pozostała część raportu działa bez niego.
+        </p>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 interface Props {
   request: AnalysisRequest | null;
@@ -170,12 +190,17 @@ function Report({
   const { parcel, request, currentState, historicalVulnerability } = result;
   const retention = result.recommendations.filter((rec) => rec.category === 'retencja');
   const agro = result.recommendations.filter((rec) => rec.category === 'agrotechnika');
+  const [showTerrain, setShowTerrain] = useState(false);
+  const openTerrain = () => {
+    setShowTerrain(true);
+    window.setTimeout(() => document.getElementById('teren-i-splyw')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
 
   return (
     <article className="report" aria-labelledby="tytul-raportu">
       <header className="report-header">
         <Steps current={2} />
-        <p className="print-only print-brand">Woda na polu · raport sytuacji wodnej działki</p>
+        <p className="print-only print-brand">Kropla w Polu · raport sytuacji wodnej działki</p>
         <p className="eyebrow">Raport sytuacji wodnej</p>
         <h1 id="tytul-raportu" ref={headingRef} tabIndex={-1}>
           Działka {parcel.id}
@@ -197,6 +222,9 @@ function Report({
         <div className="report-actions no-print">
           <button type="button" className="btn btn--secondary" onClick={onChangeParcel}>
             Zmień działkę
+          </button>
+          <button type="button" className="btn btn--secondary" onClick={openTerrain} aria-expanded={showTerrain} aria-controls="teren-i-splyw">
+            <Icon name="parcels" size={18} /> Teren i spływ 3D
           </button>
           <button type="button" className="btn btn--primary" onClick={() => window.print()}>
             <Icon name="printer" size={18} /> Drukuj lub zapisz PDF
@@ -248,7 +276,17 @@ function Report({
           </p>
         )}
         {result.recommendations.length === 0 ? (
-          <p>Brak zaleceń – dane nie pozwalają ich rzetelnie uzasadnić.</p>
+          <div className="status status--info">
+            <p>
+              Brak zaleceń – bez danych pogodowych i glebowych nie da się ich rzetelnie uzasadnić. Ukształtowanie terenu, spływ
+              i obszar do sprawdzenia pod kątem retencji pokazuje sekcja „Teren i spływ”.
+            </p>
+            {!showTerrain && (
+              <button type="button" className="btn btn--small btn--secondary no-print" onClick={openTerrain}>
+                Otwórz „Teren i spływ 3D”
+              </button>
+            )}
+          </div>
         ) : (
           <div className="recommendations-layout">
             <div className="recommendations">
@@ -292,6 +330,20 @@ function Report({
           )}
         </div>
       </section>
+
+      {showTerrain && (
+        <LoadBoundary>
+          <Suspense
+            fallback={
+              <p className="status status--loading" role="status">
+                Wczytuję moduł „Teren i spływ”…
+              </p>
+            }
+          >
+            <TerrainPanel parcelId={parcel.id} analysisDate={request.analysisDate} />
+          </Suspense>
+        </LoadBoundary>
+      )}
 
       {/* 3. Na czym opiera się wynik */}
       <section className="report-section" aria-labelledby="sekcja-dane">

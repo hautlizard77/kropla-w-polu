@@ -16,9 +16,11 @@ jobs:
         with:
           node-version: 22
       - name: Instalacja zależności
-        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+        run: npm ci || npm install
       - name: Sprawdzenie typów
         run: npm run typecheck
+      - name: Testy
+        run: npm test
       - name: Build
         run: npm run build
       - name: Zapis wyniku builda

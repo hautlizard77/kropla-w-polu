@@ -42,7 +42,12 @@ export function createApiHandler() {
       if (path === '/parcel' || path === '/terrain' || path === '/ndmi' || path === '/analysis') {
         if (!PARCEL_ID.test(id)) return send(req, res, 400, { status: 'error', message: 'Nieprawidłowy identyfikator działki.', stage: 'input' });
       }
-      if (path === '/parcel') return send(req, res, 200, await lookupParcel(id));
+      if (path === '/parcel') {
+        const lookup = await lookupParcel(id);
+        // Działka wybrana na mapie lub wpisana – teren zaczynamy pobierać od razu, zanim rolnik kliknie „Sprawdź”.
+        if (lookup.status === 'ok' && lookup.parcel.origin !== 'demo') prefetchTerrain(id);
+        return send(req, res, 200, lookup);
+      }
       if (path === '/terrain') return send(req, res, 200, await terrain(id));
       if (path === '/ndmi') {
         const date = url.searchParams.get('date') ?? '';

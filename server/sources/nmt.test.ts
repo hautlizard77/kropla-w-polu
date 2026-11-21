@@ -3,12 +3,12 @@ import { test } from 'node:test';
 import { fetchNmtPoints, parsePointList, pointGrid, pointStep } from './nmtPoints';
 
 test('krok siatki rośnie z wielkością obszaru, liczba punktów zostaje w limicie', () => {
-  assert.equal(pointStep({ minX: 0, minY: 0, maxX: 200, maxY: 200 }), 2);
-  assert.equal(pointStep({ minX: 0, minY: 0, maxX: 320, maxY: 330 }), 3);
+  assert.equal(pointStep({ minX: 0, minY: 0, maxX: 150, maxY: 150 }), 2);
+  assert.equal(pointStep({ minX: 0, minY: 0, maxX: 320, maxY: 330 }), 4);
   for (const side of [150, 400, 900, 1600, 3000]) {
     const b = { minX: 0, minY: 0, maxX: side, maxY: side };
     const { points } = pointGrid(b, pointStep(b));
-    assert.ok(points.length <= 12_000 || pointStep(b) === 15, `bok ${side} m: ${points.length} punktów`);
+    assert.ok(points.length <= 7_000 || pointStep(b) === 15, `bok ${side} m: ${points.length} punktów`);
   }
 });
 

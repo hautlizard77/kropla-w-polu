@@ -293,15 +293,17 @@ Aplikacja nie korzysta z modeli AI w czasie działania – wszystkie wyniki licz
 - Ocena wody to model: start 1 marca z pełnym zapasem, typowy kalendarz uprawy, pogoda z siatki reanalizy (ok. 10–50 km), bez podsiąku wód gruntowych i bez nawadniania wykonanego przez rolnika.
 - SoilGrids to mapa modelowa 250 m – na konkretnym polu gleba może się różnić; docelowo mapy glebowo-rolnicze IUNG-PIB.
 - Cieki pochodzą z OpenStreetMap (niekompletne dla małych rowów). MPHP Wód Polskich wymaga autoryzacji, więc nie jest używana.
+  Serwery Overpass bywają niedostępne: pytamy 3 naraz z limitem 4 s, a po porażce przez 15 min nie pytamy ponownie o tę działkę –
+  wtedy raport pokazuje „Brak danych” o ciekach, a reszta oceny działa.
 - Open-Meteo ma dzienny limit zapytań z jednego adresu – wtedy działa NASA POWER (opóźnienie danych kilka dni, uzupełniane prognozą Open-Meteo).
 - Warstwa erozji pokazuje samo nachylenie (bez opadu i pokrycia).
 - Analiza topografii nie uwzględnia opadu, infiltracji, drenażu, przepustów ani rowów pod drogami. Nie liczymy głębokości zalania.
 - D8 prowadzi wodę do jednego sąsiada – rozpraszanie spływu na stokach jest pominięte (inaczej niż MFD w `r.watershed`).
 - Pobrany raster obejmuje działkę z otoczeniem; gdy obszar dopływu wychodzi poza niego, raport to podaje.
 - NMT: podstawowym źródłem jest usługa wysokości punktów GUGiK (`services.gugik.gov.pl/nmt`, GetHByPointList): siatka co 2–15 m
-  (do ok. 12 tys. punktów, 3 zapytania naraz), zwykle 5–15 s. Wysokości mają dokładność 0,1 m, a siatka jest rzadsza niż 1 m,
+  (do ok. 7 tys. punktów, 3 zapytania naraz – więcej usługa nie obsługuje), zwykle 4–6 s. Wysokości mają dokładność 0,1 m, a siatka jest rzadsza niż 1 m,
   więc drobne formy terenu (bruzdy, wąskie rowy) mogą zniknąć. Gdy usługa nie odpowie, aplikacja pobiera WCS z Geoportalu
-  (1 m, ale zwykle 1–2 min, limit 120 s – `KROPLA_NMT_TIMEOUT_MS`). Teren jest pobierany w tle już przy ocenie wody.
+  (1 m, ale zwykle 1–2 min, limit 120 s – `KROPLA_NMT_TIMEOUT_MS`). Teren zaczyna się pobierać w tle już przy wyborze działki (`/api/parcel`) i przy ocenie wody.
 - NDMI ma rozdzielczość 20 m; przy małych działkach piksele graniczne mieszają sygnał z sąsiednich pól.
 - Nawadnianie: dawka orientacyjna z bilansu (do 30 mm), bez terminów i bez sprawdzania dostępu do wody.
 - Mapa Leaflet wymaga internetu (kafelki OSM). Bez nich działa stan awaryjny.

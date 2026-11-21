@@ -26,7 +26,15 @@ export interface HydroResult {
   message: string;
 }
 
-const MIRRORS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const MIRRORS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
+const DEADLINE_MS = 4000;
+/** Po nieudanej próbie przez 15 min nie pytamy ponownie o tę działkę – kolejne oceny nie czekają na martwe serwery. */
+const FAILURE_TTL_MS = 15 * 60 * 1000;
+const failures = new Map<string, { at: number; errors: string[] }>();
 const KINDS: Record<string, Waterway['kind']> = { river: 'rzeka', stream: 'strumień', canal: 'kanał', ditch: 'rów', drain: 'rów odwadniający' };
 const HYDRO_VERSION = 1;
 
@@ -39,53 +47,73 @@ export async function getWaterways(parcelId: string, ringWgs84: Xy[], ring2180: 
   const lon = ringWgs84.reduce((s, p) => s + p[0], 0) / ringWgs84.length;
   const parcelRadius = Math.max(...ring2180.map((p) => Math.hypot(p[0] - ring2180[0]![0], p[1] - ring2180[0]![1])));
   const around = Math.round(parcelRadius + radiusM);
-  const query = `[out:json][timeout:12];way["waterway"~"^(river|stream|canal|ditch|drain)$"](around:${around},${lat},${lon});out geom tags;`;
+  const query = `[out:json][timeout:5];way["waterway"~"^(river|stream|canal|ditch|drain)$"](around:${around},${lat},${lon});out geom tags;`;
+  const recentFailure = failures.get(key);
+  if (recentFailure && Date.now() - recentFailure.at < FAILURE_TTL_MS) return unavailable(radiusM, 0, recentFailure.errors);
   const errors: string[] = [];
-  for (const mirror of MIRRORS) {
-    try {
-      const response = await fetch(mirror, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `data=${encodeURIComponent(query)}`,
-        signal: AbortSignal.timeout(12000),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const json = (await response.json()) as { elements?: { tags?: Record<string, string>; geometry?: { lat: number; lon: number }[] }[] };
-      const waterways: Waterway[] = [];
-      for (const element of json.elements ?? []) {
-        const kind = KINDS[element.tags?.waterway ?? ''];
-        if (!kind || !element.geometry?.length) continue;
-        const line = element.geometry.map((g) => wgs84To2180([g.lon, g.lat]));
-        const distanceM = Math.round(distanceToParcel(line, ring2180));
-        if (distanceM <= radiusM) waterways.push({ kind, name: element.tags?.name ?? null, distanceM });
-      }
-      waterways.sort((a, b) => a.distanceM - b.distanceM);
-      const result: HydroResult = {
-        status: 'ok',
-        waterways: waterways.slice(0, 20),
-        searchRadiusM: radiusM,
-        message:
-          waterways.length > 0
-            ? `W promieniu ${radiusM} m od działki: ${waterways.length} odcinków cieków lub rowów (najbliższy ${waterways[0]?.distanceM} m).`
-            : `W danych OpenStreetMap nie ma cieków ani rowów w promieniu ${radiusM} m od działki.`,
-        source: {
-          name: 'Cieki i rowy w pobliżu działki',
-          provider: 'OpenStreetMap (Overpass API), © współtwórcy OpenStreetMap, ODbL',
-          url: 'https://www.openstreetmap.org',
-          origin: 'observed',
-          retrievedAt: new Date().toISOString(),
-          observationDate: null,
-          resolutionM: null,
-          durationMs: Date.now() - started,
-          notes: ['Kompletność danych o małych rowach w OSM jest różna – brak rowu w danych nie oznacza, że go nie ma.'],
-        },
-      };
-      await cacheSet('hydro', key, result);
-      return result;
-    } catch (error) {
-      errors.push(`${new URL(mirror).host}: ${errorText(error)}`);
+  // Serwery Overpass bywają przeciążone – pytamy wszystkie naraz i bierzemy pierwszą odpowiedź, z twardym limitem czasu,
+  // żeby brak cieków nie wstrzymywał całej oceny.
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(), DEADLINE_MS);
+  try {
+    const json = await Promise.any(
+      MIRRORS.map(async (mirror) => {
+        try {
+          const response = await fetch(mirror, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `data=${encodeURIComponent(query)}`,
+            signal: deadline.signal,
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return (await response.json()) as { elements?: { tags?: Record<string, string>; geometry?: { lat: number; lon: number }[] }[] };
+        } catch (error) {
+          errors.push(`${new URL(mirror).host}: ${deadline.signal.aborted ? `brak odpowiedzi w ${DEADLINE_MS / 1000} s` : errorText(error)}`);
+          throw error;
+        }
+      }),
+    );
+    deadline.abort();
+    const waterways: Waterway[] = [];
+    for (const element of json.elements ?? []) {
+      const kind = KINDS[element.tags?.waterway ?? ''];
+      if (!kind || !element.geometry?.length) continue;
+      const line = element.geometry.map((g) => wgs84To2180([g.lon, g.lat]));
+      const distanceM = Math.round(distanceToParcel(line, ring2180));
+      if (distanceM <= radiusM) waterways.push({ kind, name: element.tags?.name ?? null, distanceM });
     }
+    waterways.sort((a, b) => a.distanceM - b.distanceM);
+    const result: HydroResult = {
+      status: 'ok',
+      waterways: waterways.slice(0, 20),
+      searchRadiusM: radiusM,
+      message:
+        waterways.length > 0
+          ? `W promieniu ${radiusM} m od działki: ${waterways.length} odcinków cieków lub rowów (najbliższy ${waterways[0]?.distanceM} m).`
+          : `W danych OpenStreetMap nie ma cieków ani rowów w promieniu ${radiusM} m od działki.`,
+      source: {
+        name: 'Cieki i rowy w pobliżu działki',
+        provider: 'OpenStreetMap (Overpass API), © współtwórcy OpenStreetMap, ODbL',
+        url: 'https://www.openstreetmap.org',
+        origin: 'observed',
+        retrievedAt: new Date().toISOString(),
+        observationDate: null,
+        resolutionM: null,
+        durationMs: Date.now() - started,
+        notes: ['Kompletność danych o małych rowach w OSM jest różna – brak rowu w danych nie oznacza, że go nie ma.'],
+      },
+    };
+    await cacheSet('hydro', key, result);
+    return result;
+  } catch {
+    failures.set(key, { at: Date.now(), errors });
+    return unavailable(radiusM, Date.now() - started, errors);
+  } finally {
+    clearTimeout(timer);
   }
+}
+
+function unavailable(radiusM: number, durationMs: number, errors: string[]): HydroResult {
   return {
     status: 'unavailable',
     waterways: [],
@@ -99,7 +127,7 @@ export async function getWaterways(parcelId: string, ringWgs84: Xy[], ring2180: 
       retrievedAt: null,
       observationDate: null,
       resolutionM: null,
-      durationMs: Date.now() - started,
+      durationMs,
       notes: [`Usługa niedostępna: ${errors.join('; ')}`],
     },
   };

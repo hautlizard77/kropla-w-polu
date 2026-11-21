@@ -220,7 +220,7 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
             <div className="form-status" role="status" aria-live="polite">
               {isLoading && (
                 <p className="status status--loading">
-                  Pobieram dane działki: granicę, pogodę z 10 lat, glebę i cieki w pobliżu. Może to potrwać do 30 sekund.
+                  Pobieram dane działki: granicę, pogodę z 10 lat, glebę i cieki w pobliżu. Zwykle trwa to kilka sekund.
                 </p>
               )}
               {unavailable && (

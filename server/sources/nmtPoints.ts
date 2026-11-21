@@ -2,9 +2,10 @@
  * NMT z usługi wysokości punktów GUGiK (`services.gugik.gov.pl/nmt`, GetHByPointList).
  *
  * Usługa zwraca wysokość z NMT 1 m dla listy punktów – do 1000 punktów na zapytanie, w ok. 1 s.
- * Siatkę wokół działki próbkujemy co 2–15 m (tak, by wyszło do ok. 12 tys. punktów), wysyłając
+ * Siatkę wokół działki próbkujemy co 2–15 m (tak, by wyszło do ok. 7 tys. punktów), wysyłając
  * najwyżej 3 zapytania naraz: przy większej liczbie usługa zwraca punkty bez wysokości.
- * To kilka–kilkanaście sekund zamiast 1–2 minut usługi WCS.
+ * Usługa przetwarza ok. 1300 punktów/s (więcej równoległych zapytań nie przyspiesza), więc to ok. 4–6 s
+ * zamiast 1–2 minut usługi WCS.
  *
  * Konwencja usługi: x = północ, y = wschód (geodezyjna), odpowiedź „x y h” w kolejności zapytania.
  */
@@ -17,7 +18,7 @@ import { errorText } from './uldk';
 export const NMT_POINTS_URL = 'https://services.gugik.gov.pl/nmt/';
 const BATCH = 1000;
 const CONCURRENCY = 3;
-const TARGET_POINTS = 12_000;
+const TARGET_POINTS = 7_000;
 const MAX_MISSING_SHARE = 0.05;
 const REQUEST_TIMEOUT_MS = 20_000;
 

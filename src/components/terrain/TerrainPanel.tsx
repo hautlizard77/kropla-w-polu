@@ -158,8 +158,7 @@ export default function TerrainPanel({ parcelId, analysisDate }: Props) {
       {terrain.kind === 'loading' && (
         <div className="status status--loading" role="status">
           <p>
-            Pobieram granicę działki i Numeryczny Model Terenu, a potem liczę spływ. Przy pierwszym otwarciu działki może to
-            potrwać do 2 minut – kolejne otwarcia korzystają z bufora.
+            Pobieram model terenu z GUGiK i liczę spływ – zwykle kilka sekund. Kolejne otwarcia tej działki są natychmiastowe.
           </p>
         </div>
       )}

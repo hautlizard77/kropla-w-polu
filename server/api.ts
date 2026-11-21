@@ -83,6 +83,11 @@ function marginFor(parcel: ParcelInfo): number {
   return Math.min(300, Math.max(100, 0.5 * Math.max(b.maxX - b.minX, b.maxY - b.minY)));
 }
 
+/** Uruchamia pobranie terenu bez czekania na wynik; równoległe zapytanie z panelu dołączy do tego samego pobierania. */
+export function prefetchTerrain(parcelId: string): void {
+  terrain(parcelId).catch(() => undefined);
+}
+
 export async function terrain(parcelId: string): Promise<TerrainResponse> {
   const key = `v${TERRAIN_VERSION}:${parcelId}`;
   const started = Date.now();
@@ -161,6 +166,8 @@ export async function analysis(parcelId: string, cropId: string, date: string): 
   if (!isCropId(cropId)) return { status: 'error', message: 'Nieznana uprawa.', stage: 'input' };
   const today = todayWarsaw();
   if (date > today) return { status: 'error', message: 'Data analizy nie może być z przyszłości.', stage: 'input' };
+  // Teren pobieramy w tle już teraz – zanim rolnik otworzy „Teren i spływ 3D”, wynik jest zwykle gotowy.
+  prefetchTerrain(parcelId);
   const key = `v${ASSESS_VERSION}:${parcelId}:${cropId}:${date}`;
   const cacheable = date <= addDays(today, -10);
   if (cacheable) {

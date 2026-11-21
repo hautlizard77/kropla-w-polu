@@ -298,6 +298,8 @@ Aplikacja nie korzysta z modeli AI w czasie działania – wszystkie wyniki licz
 - D8 prowadzi wodę do jednego sąsiada – rozpraszanie spływu na stokach jest pominięte (inaczej niż MFD w `r.watershed`).
 - Pobrany raster obejmuje działkę z otoczeniem; gdy obszar dopływu wychodzi poza niego, raport to podaje.
 - NMT: czas odpowiedzi usługi WCS bywa długi (dziesiątki sekund); limit oczekiwania 120 s (`KROPLA_NMT_TIMEOUT_MS`).
+  Żeby to ukryć, teren jest pobierany w tle już przy ocenie wody, działający wariant zapytania jest zapamiętywany (`.cache/nmt-meta`),
+  a obszar większy niż 0,25 km² jest pobierany w maks. 9 częściach równolegle i sklejany.
 - NDMI ma rozdzielczość 20 m; przy małych działkach piksele graniczne mieszają sygnał z sąsiednich pól.
 - Nawadnianie: dawka orientacyjna z bilansu (do 30 mm), bez terminów i bez sprawdzania dostępu do wody.
 - Mapa Leaflet wymaga internetu (kafelki OSM). Bez nich działa stan awaryjny.

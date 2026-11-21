@@ -1,4 +1,4 @@
-# Woda na polu
+# Kropla w Polu
 
 Prototyp aplikacji webowej na **HackNation 2026**, wyzwanie KOWR
 „Zatrzymaj wodę, chroń plony – Inteligentne wsparcie gospodarowania wodą w rolnictwie”.
@@ -9,35 +9,39 @@ Rolnik wskazuje działkę ewidencyjną, wybiera uprawę i datę analizy. W odpow
 2. jakie dane wskazują na jego przyczyny,
 3. co można zrobić na polu, żeby zatrzymać wodę albo ograniczyć utratę wilgoci.
 
-> **Stan: iteracja 1, szkielet frontendu w trybie demonstracyjnym.** Analiza działa tylko dla trzech
-> jawnie oznaczonych przykładów. Dane, granice działek i zalecenia w przykładach są **ilustracyjne**.
-> Źródła danych, silnik oceny i modele AI zostaną podłączone w kolejnych etapach.
+> **Stan:** dla **dowolnej działki w Polsce** aplikacja pobiera granicę z ULDK, Numeryczny Model Terenu z Geoportalu
+> i sceny Sentinel-2, liczy spływ i NDMI oraz wskazuje obszar do sprawdzenia pod kątem retencji („Teren i spływ 3D”).
+> Ocena niedoboru wody na wybrany dzień (pogoda, gleba) i zalecenia agrotechniczne działają na razie tylko dla trzech
+> **jawnie oznaczonych przykładów demonstracyjnych** – dla innych działek raport mówi „Za mało danych” i pokazuje rzeczywisty stan źródeł.
 
 Opis zadania: [`docs/zadanie-KOWR-HackNation-2026.pdf`](docs/zadanie-KOWR-HackNation-2026.pdf) ·
 założenia tej iteracji: [`docs/zalozenia-iteracji-1.md`](docs/zalozenia-iteracji-1.md)
 
 ## Uruchomienie
 
-Wymagany jest Node.js 20.19+ albo 22.12+.
+Wymagany jest Node.js 22.12+ i dostęp do internetu (usługi GUGiK i Sentinel-2).
 
 ```bash
 npm install
-npm run dev        # serwer deweloperski, domyślnie http://localhost:5173
+npm run dev        # strona + API w jednym procesie, domyślnie http://localhost:5173
 ```
 
 Pozostałe komendy:
 
 ```bash
+npm test           # testy (node:test): odwzorowania, GeoTIFF, hydrologia, NDMI, API, raport
 npm run typecheck  # sprawdzenie typów TypeScript
 npm run build      # sprawdzenie typów i build produkcyjny do dist/
-npm run preview    # podgląd zbudowanej wersji
+npm start          # serwer produkcyjny: dist/ + API, http://localhost:4173 (po npm run build)
 ```
 
-Każdy push na `main` jest sprawdzany w GitHub Actions (typy + build), a gotowa zbudowana wersja trafia na gałąź
-**`dist`** – można ją wystawić na dowolnym hostingu statycznym (np. GitHub Pages z gałęzi `dist`).
+Aplikacja ma **część serwerową** (`server/`), bo NMT z Geoportalu nie może być pobrany bezpośrednio przez przeglądarkę
+(usługa WCS nie zezwala na zapytania z innych domen – brak nagłówków CORS). Serwer pobiera i przetwarza dane oraz zapisuje
+wyniki w buforze `.cache/`. W `npm run dev` i `npm run preview` API działa jako wtyczka Vite, więc wystarczy jedna komenda.
+Rolnik korzysta tylko z przeglądarki.
 
-Zbudowana aplikacja (`dist/`) to statyczne pliki z względnymi ścieżkami (`base: './'`), więc można ją umieścić
-na dowolnym hostingu statycznym. Rolnik nie musi niczego instalować, wystarczy przeglądarka.
+Każdy push na `main` jest sprawdzany w GitHub Actions (typy, testy, build), a zbudowana część kliencka trafia na gałąź
+**`dist`**. Sama gałąź `dist` bez serwera pokazuje tryb demo bez funkcji „Teren i spływ”.
 
 ## Aplikacja
 
@@ -82,17 +86,62 @@ widać przy dzwonku i w menu. Dodane działki, przeczytane powiadomienia i ustaw
   komunikaty stanu w regionach `aria-live`. Poziom ryzyka zawsze ma tekst i symbol, a kolor tylko go wspiera.
 - **Układ**: na komputerze formularz i mapa są obok siebie, na telefonie formularz jest przed mapą.
 
+## Teren i spływ 3D
+
+Przycisk **„Teren i spływ 3D”** w raporcie otwiera sekcję z analizą topografii działki. Moduł (WebGL) ładuje się
+dopiero po kliknięciu, więc raport otwiera się niezależnie od niego.
+
+**Przepływ danych (serwer, EPSG:2180):**
+
+1. Granica działki z **ULDK** (`GetParcelById`, `srid=2180`).
+2. Wycinek **NMT** z Geoportalu (WCS `DTM_PL-KRON86-NH_TIFF`, GeoTIFF) w natywnej rozdzielczości usługi (siatka 1 m),
+   obejmujący działkę z otoczeniem (margines: połowa rozmiaru działki, od 100 do 300 m).
+3. **Analiza spływu** (własna implementacja, `server/terrain/`):
+   - wypełnienie zagłębień Priority-Flood (Barnes i in. 2014) – wariant z ε do kierunków spływu i bez ε do głębokości zagłębień,
+   - kierunek spływu **D8** i akumulacja spływu (powierzchnia zlewni w m²),
+   - **dopływ spoza rastra**: komórki brzegowe, z których woda płynie do środka, oznaczamy jako możliwy dopływ z zewnątrz
+     i przenosimy tę informację w dół spływu; raport podaje odsetek powierzchni działki, której to dotyczy,
+   - linie spływu od progu `max(1000 m², 1,5% powierzchni działki)` (najwyżej 1 ha zlewni); grubość linii = log akumulacji,
+   - **miejsca koncentracji**: punkty, w których skupiony spływ opuszcza działkę, i punkt największej akumulacji w działce,
+   - **potencjalne zastoiska**: zagłębienia głębsze niż 0,15 m i większe niż 40 m²,
+   - **nachylenie** (metoda Horna) i klasy nachylenia,
+   - **obszar do sprawdzenia pod kątem retencji**: zagłębienie o największym obszarze dopływu (ważone głębokością),
+     a gdy go brak – miejsce najsilniejszego skupienia spływu na możliwie płaskim terenie; z uzasadnieniem liczbowym.
+4. **NDMI** (na żądanie, przełącznik „NDMI”): sceny **Sentinel-2 L2A** z katalogu Earth Search (STAC) z daty analizy
+   lub wcześniejszych (45 dni wstecz, dzień liczony w strefie Europe/Warsaw). Z plików COG czytamy tylko fragment działki
+   (zapytania HTTP Range): najpierw maskę **SCL** – zostają klasy 4 (roślinność), 5 (grunt), 6 (woda); odrzucamy chmury,
+   cienie, cirrus, śnieg, nasycenie, piksele niesklasyfikowane i braki. Wybieramy najnowszą scenę z co najmniej 60%
+   użytecznych pikseli działki, a dopiero dla niej pobieramy pasma B8A i B11 (20 m). NDMI = (B8A − B11) / (B8A + B11)
+   po odjęciu przesunięcia BOA (linia przetwarzania ≥ 04.00). Odchylenia: |NDMI − mediana działki| > max(0,06; 2 × 1,4826 × MAD).
+
+**Widok:** siatka 3D (WebGL, przewyższenie dobierane automatycznie) z granicą działki, liniami spływu, strzałkami kierunku,
+kółkami w miejscach koncentracji, zastoiskami i obszarem do sprawdzenia. Kolor powierzchni: wysokość, NDMI albo
+„Podatność na erozję”. Bez danych glebowych ta ostatnia warstwa pokazuje **samo nachylenie**. Widok 2D (canvas) jest zapasem
+przy braku WebGL lub utracie kontekstu i służy do wydruku. Sterowanie: przeciąganie, kółko myszy, strzałki i +/− na klawiaturze, przyciski.
+
+**Bufor:** wynik analizy terenu jest zapisywany w pamięci serwera i w `.cache/terrain/` (klucz: wersja algorytmu + działka),
+NDMI w `.cache/ndmi/` (wersja + działka + data), granica w `.cache/uldk/`. Ponowne otwarcie działki nie pobiera danych.
+
+**Jednostki:** wysokości w m n.p.m. (Kronsztadt86), odległości i rozdzielczość w m, powierzchnie w m² i ha, nachylenie w stopniach,
+NDMI bez jednostki (−1…1), objętość zagłębienia w m³ (pojemność topograficzna, bez infiltracji i opadu).
+
+**Czym różni się od GRASS `r.watershed`:** `r.watershed` domyślnie używa wielokierunkowego spływu (MFD) i algorytmu A*.
+Tu stosujemy jednokierunkowy D8 po wypełnieniu zagłębień – linie spływu są wyraźniejsze, ale rozpraszanie wody na stokach
+jest pominięte. Wybraliśmy własną implementację, żeby jury nie musiało instalować GRASS GIS.
+
 ## Tryb demo
 
 | Przykład | Działka | Uprawa | Data analizy | Co pokazuje |
 |---|---|---|---|---|
 | Kujawy, czerwiec 2019 | `040705_5.0012.245/3` | pszenica ozima | 2019-06-26 | podwyższone ryzyko, sugerowany obszar na mapie (rów) |
 | Lubelskie, maj 2021 | `062010_2.0004.301` | rzepak ozimy | 2021-05-20 | niskie ryzyko, umiarkowana podatność historyczna |
-| Wielkopolska, sierpień 2024 | `302005_2.0015.88/2` | kukurydza na ziarno | 2024-08-08 | „Za mało danych” – brak bezchmurnej sceny satelitarnej, brak danych o terenie i ciekach |
+| Wielkopolska, sierpień 2024 | `302005_2.0015.88/2` | kukurydza na ziarno | 2024-08-08 | „Za mało danych” – brak bezchmurnej sceny satelitarnej (przypadek zachmurzenia także w NDMI) |
 
 - Scenariusz demo zwracamy **tylko** przy dokładnie pasującym zestawie: działka, uprawa i data. Dla innej działki,
   daty lub uprawy aplikacja informuje, że w tej wersji nie ma analizy, i podpowiada, dla jakich danych przykład działa.
 - Identyfikatory i geometrie działek są wymyślone. Nie wskazują rzeczywistych działek.
+- Dla tych trzech działek „Teren i spływ” używa **syntetycznego terenu i syntetycznego NDMI** (`server/terrain/demo.ts`),
+  oznaczonych w interfejsie jako „Dane demonstracyjne”. Każda inna działka korzysta z ULDK, NMT i Sentinel-2.
 - Aby sprawdzić stan błędu technicznego, dodaj do adresu `?symulujBlad=1`, np. `http://localhost:5173/?symulujBlad=1`.
 
 ## Architektura
@@ -109,7 +158,17 @@ src/
   services/analysis.ts    JEDNO asynchroniczne wejście do analizy: analyzeParcel()
   lib/                    daty (strefa Europe/Warsaw), walidacja formularza, routing (#), etykiety
   components/             powłoka aplikacji (menu, pasek górny, nawigacja dolna), zakładki, raport, mapa, ikony
+  components/terrain/     widok „Teren i spływ”: renderer WebGL, widok 2D, warstwy i legendy (ładowany na żądanie)
+  services/terrain.ts     klient API terenu i NDMI
+  types/terrain.ts        typy odpowiedzi API (wspólne dla serwera i strony)
   styles.css              style ekranu i wydruku
+server/
+  api.ts                  /api/parcel, /api/terrain, /api/ndmi, /api/health
+  standalone.ts           serwer produkcyjny (dist/ + API)
+  cache.ts                bufor w pamięci i na dysku
+  geo/                    odwzorowania (EPSG:2180, UTM), czytnik GeoTIFF/COG, geometria
+  sources/                ULDK, NMT (WCS Geoportalu), Sentinel-2 (STAC + COG, NDMI)
+  terrain/                hydrologia, analiza działki, dane demonstracyjne
 ```
 
 - Komponenty tylko **renderują** wynik. Nie liczą wskaźników i nie wybierają zaleceń.
@@ -161,13 +220,17 @@ Adres usługi ustawia się zmienną `VITE_ANALYSIS_API_URL`, np. w pliku `.env.l
 
 ## Dane i ich aktualność
 
-| Dane | Pobierane na bieżąco? | Data pobrania |
+| Dane | Pobierane na bieżąco? | Data pobrania / obserwacji w raporcie |
 |---|---|---|
-| Scenariusze demo (`src/data/demoScenarios.ts`) | nie – wartości ilustracyjne wpisane ręcznie | nie dotyczy |
+| Granica działki – ULDK (GUGiK) | tak, przy pierwszym otwarciu działki, potem z bufora | data i godzina pobrania |
+| NMT – Geoportal WCS (GUGiK), 1 m | tak, przy pierwszym otwarciu „Teren i spływ”, potem z bufora | data pobrania; data nalotu LiDAR nie jest zwracana przez usługę |
+| Sentinel-2 L2A – Earth Search STAC + COG | tak, przy włączeniu NDMI, potem z bufora | data sceny, data pobrania, pokrycie działki |
+| Scenariusze demo (`src/data/demoScenarios.ts`, `server/terrain/demo.ts`) | nie – wartości ilustracyjne i syntetyczne | nie dotyczy |
 | Podkład mapy OpenStreetMap | tak – kafelki pobierane w przeglądarce | przy każdym wyświetleniu |
+| Pogoda, gleba, hydrologia | **nie podłączone** – dla działek spoza demo raport pokazuje „Brak danych” | – |
 
-W tej wersji wynik **nie jest** liczony z rzeczywistych danych. To wymaganie (pkt 4.2 opisu zadania) zostanie spełnione
-po podłączeniu silnika analizy.
+Spływ, zastoiska, nachylenie, obszar do sprawdzenia i NDMI **liczy aplikacja** z pobranych danych (pkt 4.2 opisu zadania).
+Ocena niedoboru wody na dzień analizy wymaga jeszcze danych pogodowych i glebowych.
 
 ## Biblioteki, usługi i licencje
 
@@ -177,24 +240,51 @@ po podłączeniu silnika analizy.
 | Vite, @vitejs/plugin-react | budowanie | MIT |
 | TypeScript | typy | Apache-2.0 |
 | Leaflet | mapa | BSD-2-Clause |
+| tsx, @types/node | uruchamianie serwera i testów w TypeScript | MIT |
 | Kafelki OpenStreetMap (`tile.openstreetmap.org`) | podkład mapy | dane © współtwórcy OpenStreetMap, ODbL; obowiązuje [polityka korzystania z kafelków](https://operations.osmfoundation.org/policies/tiles/) – przy większym ruchu trzeba przejść na własny lub komercyjny serwer kafelków |
+| ULDK (GUGiK) – `uldk.gugik.gov.pl` | granice działek | dane PZGiK udostępniane nieodpłatnie; warunki: [opis usługi](https://uldk.gugik.gov.pl/opis.html) |
+| NMT – Geoportal WCS (GUGiK) | model terenu | dane PZGiK udostępniane nieodpłatnie; warunki: [geoportal.gov.pl](https://www.geoportal.gov.pl) |
+| Sentinel-2 L2A (Copernicus, ESA) przez Earth Search (Element 84) i AWS Open Data | NDMI | Copernicus – wolny i otwarty dostęp, wymagane przypisanie „Contains modified Copernicus Sentinel data [rok]” |
 
-**Narzędzia AI:** szkielet kodu i treści interfejsu przygotowano z pomocą asystenta AI Claude (Anthropic).
-Aplikacja w tej wersji nie korzysta z modeli AI w czasie działania.
+Odwzorowania kartograficzne, czytnik GeoTIFF, algorytmy hydrologiczne i renderer 3D są napisane w tym repozytorium
+(bez proj4, GDAL, GRASS ani three.js).
+
+**Narzędzia AI:** kod i treści interfejsu przygotowano z pomocą asystenta AI Claude (Anthropic).
+Aplikacja nie korzysta z modeli AI w czasie działania – wszystkie wyniki liczą jawne algorytmy opisane wyżej.
 
 ## Znane ograniczenia
 
-- Analiza działa tylko dla trzech przykładów demonstracyjnych. Wartości nie pochodzą z pomiarów.
-- Brak połączenia z API danych przestrzennych, pogodowych, satelitarnych, glebowych i hydrologicznych.
+- Ocena niedoboru wody i zalecenia agrotechniczne działają tylko dla trzech przykładów demonstracyjnych.
+- Pogoda, gleba i hydrologia nie są podłączone; warstwa erozji pokazuje więc samo nachylenie.
+- Analiza topografii nie uwzględnia opadu, infiltracji, drenażu, przepustów ani rowów pod drogami. Nie liczymy głębokości zalania.
+- D8 prowadzi wodę do jednego sąsiada – rozpraszanie spływu na stokach jest pominięte (inaczej niż MFD w `r.watershed`).
+- Pobrany raster obejmuje działkę z otoczeniem; gdy obszar dopływu wychodzi poza niego, raport to podaje.
+- NMT: czas odpowiedzi usługi WCS bywa długi (dziesiątki sekund); limit oczekiwania 120 s (`KROPLA_NMT_TIMEOUT_MS`).
+- NDMI ma rozdzielczość 20 m; przy małych działkach piksele graniczne mieszają sygnał z sąsiednich pól.
 - Nawadnianie: tylko miejsce w modelu raportu, bez dawek i terminów.
-- Walidacja identyfikatora sprawdza tylko format (`WWPPGG_R.OOOO[.AR_n].NR[/NR]`), a nie to, czy działka istnieje.
-- Mapa interaktywna wymaga internetu (kafelki OSM). Bez nich działa stan awaryjny.
-- Brak testów automatycznych w repozytorium. CI (GitHub Actions) sprawdza typy i build; ścieżki interfejsu (demo, zmiana działki, brak danych, błąd, wydruk, układ mobilny, wybór działki na mapie Leaflet) sprawdzono skryptem Playwright poza repozytorium.
+- Mapa Leaflet wymaga internetu (kafelki OSM). Bez nich działa stan awaryjny.
 
 ## Weryfikacja wyników
 
-W tej iteracji wynik to dane ilustracyjne, więc weryfikujemy przepływ aplikacji, a nie poprawność merytoryczną.
-W kolejnych etapach planujemy:
+**Testy automatyczne** (`npm test`, uruchamiane w CI):
+
+- odwzorowania EPSG:2180 i UTM (punkt kontrolny z ULDK, przeliczenia w obie strony),
+- czytnik GeoTIFF na plikach wygenerowanych niezależnym narzędziem (tifffile): bez kompresji, Deflate w kaflach, predyktor, NoData, georeferencja,
+- hydrologia na sztucznym terenie: stok, dolina V, zagłębienie o znanej głębokości, dopływ spoza rastra, nachylenie Horna,
+  wskazanie zagłębienia jako obszaru do sprawdzenia,
+- NDMI: odrzucanie scen po dacie analizy (dzień w Polsce), statystyki, maska i odchylenia,
+- API: tryb demo, odczyt z bufora, przypadek zachmurzenia; raport dla działki spoza demo bez wymyślonej diagnozy.
+
+**Porównanie z QGIS** (kierunek spływu na prawdziwej działce):
+
+1. W QGIS dodaj warstwę WCS `https://mapy.geoportal.gov.pl/wss/service/PZGIK/NMT/GRID1/WCS/DigitalTerrainModelFormatTIFF`
+   (pokrycie `DTM_PL-KRON86-NH_TIFF`) i przytnij ją do zasięgu z sekcji „Źródła” w raporcie.
+2. Uruchom „Fill sinks (Wang & Liu)” (SAGA), a potem „Flow accumulation (top-down)” z metodą D8 albo `r.watershed`
+   z opcją `-s` (jednokierunkowy spływ).
+3. Porównaj linie największej akumulacji i kierunek odpływu z działki z liniami i kółkami w widoku 2D aplikacji.
+   Przy MFD (domyślne `r.watershed`) linie będą szersze, ale ich przebieg i miejsca wypływu z działki powinny się pokrywać.
+
+**Dalsze kroki:**
 
 - porównanie oceny z Monitoringiem Suszy Rolniczej IUNG-PIB i EDO (Copernicus) dla tych samych dat,
 - testy na działkach z różnych regionów i lat (np. susze 2015, 2018, 2019) i sprawdzenie, czy ocena historyczna

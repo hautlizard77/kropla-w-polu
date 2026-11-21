@@ -184,7 +184,10 @@ export function accumulate(raster: Raster, dir: Int8Array): { accumulation: Floa
   const indegree = new Uint8Array(n);
   for (let i = 0; i < n; i += 1) {
     const d = dir[i] as number;
-    if (d >= 0) indegree[downstreamIndex(i, d, width)] += 1;
+    if (d >= 0) {
+      const j = downstreamIndex(i, d, width);
+      indegree[j] = (indegree[j] as number) + 1;
+    }
   }
   const accumulation = new Float64Array(n);
   const truncated = new Uint8Array(n);

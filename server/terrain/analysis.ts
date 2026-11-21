@@ -305,7 +305,10 @@ function traceChannels(
   const channelInflow = new Uint8Array(n);
   for (let i = 0; i < n; i += 1) {
     const d = dir[i] as number;
-    if (d >= 0 && isChannel(i)) channelInflow[downstreamIndex(i, d, width)] += 1;
+    if (d >= 0 && isChannel(i)) {
+      const j = downstreamIndex(i, d, width);
+      channelInflow[j] = (channelInflow[j] as number) + 1;
+    }
   }
   const visited = new Uint8Array(n);
   const lines: FlowLine[] = [];

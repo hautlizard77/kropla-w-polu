@@ -20,7 +20,7 @@ const BATCH = 1000;
 const CONCURRENCY = 3;
 const TARGET_POINTS = 7_000;
 const MAX_MISSING_SHARE = 0.05;
-const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 10_000;
 
 /** Krok siatki: najmniejszy z 2, 3, 4, 5, 6, 8, 10, 12, 15 m, przy którym liczba punktów nie przekracza celu. */
 export function pointStep(b: Bounds): number {
@@ -78,13 +78,6 @@ async function withSlot<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Nagłówki jak w przeglądarce – usługi GUGiK odpowiadają na nie najstabilniej. */
-const HEADERS = {
-  Accept: '*/*',
-  'Accept-Language': 'pl-PL,pl;q=0.9,en;q=0.8',
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36',
-};
-
 async function fetchBatch(points: [number, number][]): Promise<Float64Array> {
   const list = points.map(([e, n]) => `${n} ${e}`).join(',');
   let last: Float64Array = new Float64Array(points.length).fill(Number.NaN);
@@ -94,7 +87,6 @@ async function fetchBatch(points: [number, number][]): Promise<Float64Array> {
       const text = await withSlot(async () => {
         const response = await fetch(NMT_POINTS_URL, {
           method: 'POST',
-          headers: HEADERS,
           body: new URLSearchParams({ request: 'GetHByPointList', list }),
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });

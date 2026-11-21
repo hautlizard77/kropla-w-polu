@@ -295,6 +295,7 @@ Ocenę niedoboru wody, historię i zalecenia aplikacja liczy z pogody, gleby i h
 | NMT – usługa wysokości GUGiK i Geoportal WCS | model terenu | dane PZGiK udostępniane nieodpłatnie; warunki: [geoportal.gov.pl](https://www.geoportal.gov.pl) |
 | Sentinel-2 L2A (Copernicus, ESA) przez Earth Search (Element 84) i AWS Open Data | NDMI | Copernicus – wolny i otwarty dostęp, wymagane przypisanie „Contains modified Copernicus Sentinel data [rok]” |
 | Open-Meteo (Archive, Forecast) | pogoda | dane CC BY 4.0; darmowe API tylko do użytku niekomercyjnego, dzienny limit zapytań |
+| MET Norway – Locationforecast 2.0 | prognoza zapasowa (gdy Open-Meteo zwróci np. 429) | CC BY 4.0; wymagany identyfikujący User-Agent; ET0 liczone w aplikacji (FAO-56, promieniowanie z zachmurzenia) |
 | NASA POWER (LaRC) | pogoda zapasowa | dane publiczne NASA, wymagane przypisanie źródła |
 | ISRIC SoilGrids 2.0 | gleba | CC BY 4.0 |
 | OpenStreetMap przez Overpass API | cieki i rowy | ODbL; publiczne serwery Overpass mają limity i bywają przeciążone |
@@ -320,7 +321,7 @@ Aplikacja nie korzysta z modeli AI w czasie działania – wszystkie wyniki licz
 - NMT: podstawowym źródłem jest usługa wysokości punktów GUGiK (`services.gugik.gov.pl/nmt`, GetHByPointList): siatka co 2–15 m
   (do ok. 7 tys. punktów, 3 zapytania naraz – więcej usługa nie obsługuje), zwykle 4–6 s. Wysokości mają dokładność 0,1 m, a siatka jest rzadsza niż 1 m,
   więc drobne formy terenu (bruzdy, wąskie rowy) mogą zniknąć. Gdy usługa nie odpowie, aplikacja pobiera WCS z Geoportalu
-  (1 m, ale zwykle 1–2 min, limit 120 s – `KROPLA_NMT_TIMEOUT_MS`). Teren zaczyna się pobierać w tle przy ocenie wody. Limit 3 jednoczesnych zapytań do usługi wysokości jest wspólny dla wszystkich działek; gdy usługa nie zwraca wysokości, serwer przerywa po pierwszych nieudanych paczkach i przechodzi na WCS (łącznie najwyżej 100 s).
+  (1 m, ale zwykle 1–2 min, limit 120 s – `KROPLA_NMT_TIMEOUT_MS`). Teren zaczyna się pobierać w tle przy ocenie wody. Limit 3 jednoczesnych zapytań do usługi wysokości jest wspólny dla wszystkich działek; gdy usługa nie zwraca wysokości, serwer przerywa po pierwszych nieudanych paczkach i przechodzi na WCS (łącznie najwyżej 60 s). Etapy pobierania terenu są zapisywane w terminalu serwera (`[teren] …`).
 - NDMI ma rozdzielczość 20 m; przy małych działkach piksele graniczne mieszają sygnał z sąsiednich pól.
 - Nawadnianie: dawka orientacyjna z bilansu (do 30 mm), bez terminów i bez sprawdzania dostępu do wody.
 - ULDK ma limit zapytań na adres IP: po serii zapytań przez ok. pół minuty odrzuca kolejne albo odsyła bezużyteczną odpowiedź

@@ -13,7 +13,7 @@ export const NMT_WCS_URL =
   'https://mapy.geoportal.gov.pl/wss/service/PZGIK/NMT/GRID1/WCS/DigitalTerrainModelFormatTIFF';
 export const NMT_COVERAGE_ID = 'DTM_PL-KRON86-NH_TIFF';
 const TIMEOUT_MS = Number(process.env.KROPLA_NMT_TIMEOUT_MS ?? 90000);
-const TOTAL_BUDGET_MS = 100_000;
+const TOTAL_BUDGET_MS = 60_000;
 
 export interface DemRaster {
   values: Float64Array;

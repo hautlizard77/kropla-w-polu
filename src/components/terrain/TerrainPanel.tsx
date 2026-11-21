@@ -172,7 +172,7 @@ export default function TerrainPanel({ parcelId, analysisDate }: Props) {
           {waitedS >= 15 && (
             <p>
               Trwa to już {waitedS} s – usługa GUGiK odpowiada wolniej niż zwykle albo chwilowo ogranicza liczbę zapytań. Jeśli nie
-              odpowie, aplikacja spróbuje wolniejszego, zapasowego źródła (najwyżej ok. 2 minuty).
+              odpowie, aplikacja spróbuje wolniejszego, zapasowego źródła (najwyżej ok. minuty).
             </p>
           )}
         </div>

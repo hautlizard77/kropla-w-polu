@@ -105,7 +105,10 @@ export async function terrain(parcelId: string): Promise<TerrainResponse> {
     const lookup = await lookupParcel(parcelId);
     timings.push({ label: 'Granica działki (ULDK)', ms: Date.now() - t0 });
     if (lookup.status === 'not_found') return { status: 'not_found', message: lookup.message };
-    if (lookup.status === 'error') return { status: 'error', message: lookup.message, stage: 'uldk' };
+    if (lookup.status === 'error') {
+      console.warn(`[teren] ${parcelId}: brak granicy z ULDK – ${lookup.message}`);
+      return { status: 'error', message: lookup.message, stage: 'uldk' };
+    }
     const parcel = lookup.parcel;
 
     const t1 = Date.now();
@@ -113,10 +116,12 @@ export async function terrain(parcelId: string): Promise<TerrainResponse> {
     try {
       dem = parcel.origin === 'demo' ? demoDem(parcel) : await fetchDem(expand(boundsOf(parcel.ring2180), marginFor(parcel)));
     } catch (error) {
+      console.warn(`[teren] ${parcelId}: model terenu niedostępny po ${Date.now() - t1} ms – ${errorText(error)}`);
       return { status: 'error', message: errorText(error), stage: 'nmt' };
     }
     timings.push({ label: parcel.origin === 'demo' ? 'Teren syntetyczny (demo)' : 'Model terenu (GUGiK)', ms: Date.now() - t1 });
 
+    console.info(`[teren] ${parcelId}: granica ${timings[0]?.ms ?? 0} ms, model terenu ${Date.now() - t1} ms (${dem.source.provider})`);
     const t2 = Date.now();
     const computed = computeTerrain({ parcel, values: dem.values, grid: dem.grid, demSource: dem.source });
     timings.push({ label: 'Analiza spływu i nachylenia', ms: Date.now() - t2 });

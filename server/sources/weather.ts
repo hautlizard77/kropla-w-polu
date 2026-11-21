@@ -211,13 +211,7 @@ export function et0PenmanMonteith(input: {
   const ea = (rhMean / 100) * esMean;
   const delta = (4098 * es(tMean)) / (tMean + 237.3) ** 2;
   // Promieniowanie pozaziemskie Ra i promieniowanie przy bezchmurnym niebie Rso.
-  const [y, m, d] = input.date.split('-').map(Number) as [number, number, number];
-  const doy = Math.round((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 0)) / 86400000);
-  const phi = (input.latDeg * Math.PI) / 180;
-  const dr = 1 + 0.033 * Math.cos((2 * Math.PI * doy) / 365);
-  const decl = 0.409 * Math.sin((2 * Math.PI * doy) / 365 - 1.39);
-  const ws = Math.acos(Math.max(-1, Math.min(1, -Math.tan(phi) * Math.tan(decl))));
-  const ra = ((24 * 60) / Math.PI) * 0.082 * dr * (ws * Math.sin(phi) * Math.sin(decl) + Math.cos(phi) * Math.cos(decl) * Math.sin(ws));
+  const ra = extraterrestrialRadiation(input.date, input.latDeg);
   const rso = (0.75 + 2e-5 * z) * ra;
   const rns = 0.77 * rsMj;
   const sigma = 4.903e-9;
@@ -227,6 +221,17 @@ export function et0PenmanMonteith(input: {
   const rn = rns - rnl;
   const et0 = (0.408 * delta * rn + gamma * (900 / (tMean + 273)) * wind2m * (esMean - ea)) / (delta + gamma * (1 + 0.34 * wind2m));
   return Math.max(0, Math.round(et0 * 100) / 100);
+}
+
+/** Promieniowanie pozaziemskie Ra [MJ/m²/doba] (FAO-56, równ. 21). */
+export function extraterrestrialRadiation(date: string, latDeg: number): number {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  const doy = Math.round((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 0)) / 86400000);
+  const phi = (latDeg * Math.PI) / 180;
+  const dr = 1 + 0.033 * Math.cos((2 * Math.PI * doy) / 365);
+  const decl = 0.409 * Math.sin((2 * Math.PI * doy) / 365 - 1.39);
+  const ws = Math.acos(Math.max(-1, Math.min(1, -Math.tan(phi) * Math.tan(decl))));
+  return ((24 * 60) / Math.PI) * 0.082 * dr * (ws * Math.sin(phi) * Math.sin(decl) + Math.cos(phi) * Math.cos(decl) * Math.sin(ws));
 }
 
 export interface ForecastDayRaw {
@@ -250,53 +255,182 @@ export interface ForecastSeries {
 const forecastMemory = new Map<string, { at: number; value: ForecastSeries }>();
 const FORECAST_TTL_MS = 60 * 60 * 1000;
 
-/** Prognoza dzienna na 10 dni (Open-Meteo, łączone modele numeryczne) i 7 ostatnich dni; bufor 1 h. */
+/**
+ * Prognoza dzienna na ok. 10 dni; bufor 1 h w pamięci i na dysku (restart serwera nie zużywa limitu zapytań).
+ * Kolejność: Open-Meteo (z prawdopodobieństwem opadu i ET0) → MET Norway (gdy Open-Meteo odmówi, np. dzienny limit 429).
+ */
 export async function getForecast(lat: number, lon: number, today: string): Promise<ForecastSeries> {
   const rLat = Math.round(lat * 20) / 20;
   const rLon = Math.round(lon * 20) / 20;
   const key = `${rLat}:${rLon}:${today}`;
-  const hit = forecastMemory.get(key);
+  const hit = forecastMemory.get(key) ?? (await cacheGet<{ at: number; value: ForecastSeries }>('forecast', key));
   if (hit && Date.now() - hit.at < FORECAST_TTL_MS) return hit.value;
   return once(`forecast:${key}`, async () => {
-    const t0 = Date.now();
-    const url =
-      `https://api.open-meteo.com/v1/forecast?latitude=${rLat}&longitude=${rLon}&past_days=7&forecast_days=10` +
-      '&daily=precipitation_sum,precipitation_probability_max,et0_fao_evapotranspiration,temperature_2m_max,temperature_2m_min' +
-      '&timezone=Europe%2FWarsaw';
-    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
-    if (!response.ok) throw new Error(`Open-Meteo Forecast: HTTP ${response.status}`);
-    const json = (await response.json()) as {
-      daily?: {
-        time: string[];
-        precipitation_sum: (number | null)[];
-        precipitation_probability_max: (number | null)[];
-        et0_fao_evapotranspiration: (number | null)[];
-        temperature_2m_max: (number | null)[];
-        temperature_2m_min: (number | null)[];
-      };
-    };
-    const d = json.daily;
-    if (!d) throw new Error('Open-Meteo Forecast: brak danych dziennych');
-    const value: ForecastSeries = {
-      issuedAt: new Date().toISOString(),
-      days: d.time.map((date, i) => ({
-        date,
-        precipitationMm: d.precipitation_sum[i] ?? null,
-        probabilityPct: d.precipitation_probability_max[i] ?? null,
-        et0Mm: d.et0_fao_evapotranspiration[i] ?? null,
-        tMax: d.temperature_2m_max[i] ?? null,
-        tMin: d.temperature_2m_min[i] ?? null,
-        past: date < today,
-      })),
-      source: source(
-        'Prognoza opadu, ET0 i temperatury na 10 dni',
-        'Open-Meteo Forecast (najlepsze dostępne modele numeryczne dla punktu, m.in. ICON, ECMWF)',
-        'https://open-meteo.com/en/docs',
-        Date.now() - t0,
-        'Prognoza – im dalszy dzień, tym większa niepewność, szczególnie dla opadów konwekcyjnych (burz).',
-      ),
-    };
-    forecastMemory.set(key, { at: Date.now(), value });
+    const errors: string[] = [];
+    let value: ForecastSeries | null = null;
+    try {
+      value = await fetchOpenMeteoForecast(rLat, rLon, today);
+    } catch (error) {
+      errors.push(`Open-Meteo: ${errorText(error)}`);
+    }
+    if (!value) {
+      try {
+        value = await fetchMetNoForecast(rLat, rLon, today);
+        value.source.notes.unshift(`Open-Meteo niedostępne (${errors.join('; ')}) – użyto prognozy MET Norway.`);
+      } catch (error) {
+        errors.push(`MET Norway: ${errorText(error)}`);
+      }
+    }
+    if (!value) throw new Error(`Prognoza pogody niedostępna – ${errors.join('; ')}`);
+    const entry = { at: Date.now(), value };
+    forecastMemory.set(key, entry);
+    await cacheSet('forecast', key, entry);
     return value;
   });
+}
+
+async function fetchOpenMeteoForecast(rLat: number, rLon: number, today: string): Promise<ForecastSeries> {
+  const t0 = Date.now();
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${rLat}&longitude=${rLon}&past_days=7&forecast_days=10` +
+    '&daily=precipitation_sum,precipitation_probability_max,et0_fao_evapotranspiration,temperature_2m_max,temperature_2m_min' +
+    '&timezone=Europe%2FWarsaw';
+  const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!response.ok) throw new Error(`Open-Meteo Forecast: HTTP ${response.status}`);
+  const json = (await response.json()) as {
+    daily?: {
+      time: string[];
+      precipitation_sum: (number | null)[];
+      precipitation_probability_max: (number | null)[];
+      et0_fao_evapotranspiration: (number | null)[];
+      temperature_2m_max: (number | null)[];
+      temperature_2m_min: (number | null)[];
+    };
+  };
+  const d = json.daily;
+  if (!d) throw new Error('Open-Meteo Forecast: brak danych dziennych');
+  const value: ForecastSeries = {
+    issuedAt: new Date().toISOString(),
+    days: d.time.map((date, i) => ({
+      date,
+      precipitationMm: d.precipitation_sum[i] ?? null,
+      probabilityPct: d.precipitation_probability_max[i] ?? null,
+      et0Mm: d.et0_fao_evapotranspiration[i] ?? null,
+      tMax: d.temperature_2m_max[i] ?? null,
+      tMin: d.temperature_2m_min[i] ?? null,
+      past: date < today,
+    })),
+    source: source(
+      'Prognoza opadu, ET0 i temperatury na 10 dni',
+      'Open-Meteo Forecast (najlepsze dostępne modele numeryczne dla punktu, m.in. ICON, ECMWF)',
+      'https://open-meteo.com/en/docs',
+      Date.now() - t0,
+      'Prognoza – im dalszy dzień, tym większa niepewność, szczególnie dla opadów konwekcyjnych (burz).',
+    ),
+  };
+  return value;
+}
+
+const warsawDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Warsaw', year: 'numeric', month: '2-digit', day: '2-digit' });
+
+/**
+ * MET Norway Locationforecast 2.0 (dane CC BY 4.0, wymagany identyfikujący User-Agent). Kroki godzinowe, dalej 6-godzinne;
+ * sumujemy je do dni (czas polski). ET0 liczymy wzorem FAO-56 Penman–Monteith; promieniowanie z zachmurzenia
+ * (Ångström: Rs = (0,25 + 0,5·(1 − zachmurzenie))·Ra), wiatr z 10 m przeliczony na 2 m (×0,748).
+ */
+export async function fetchMetNoForecast(lat: number, lon: number, today: string): Promise<ForecastSeries> {
+  const t0 = Date.now();
+  const url = `https://api.met.no/weatherapi/locationforecast/2.0/complete?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`;
+  const response = await fetch(url, {
+    headers: { 'User-Agent': 'KroplaWPolu/1.0 (+https://github.com/hautlizard77/woda-na-polu)', Accept: 'application/json' },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const json = (await response.json()) as {
+    properties?: {
+      timeseries?: {
+        time: string;
+        data: {
+          instant: { details: Record<string, number> };
+          next_1_hours?: { details?: { precipitation_amount?: number } };
+          next_6_hours?: { details?: { precipitation_amount?: number; air_temperature_max?: number; air_temperature_min?: number } };
+        };
+      }[];
+    };
+  };
+  const series = json.properties?.timeseries ?? [];
+  if (series.length === 0) throw new Error('brak danych prognozy');
+  return { issuedAt: new Date().toISOString(), days: aggregateMetNo(series, lat, today), source: metSource(Date.now() - t0) };
+}
+
+export function aggregateMetNo(
+  series: {
+    time: string;
+    data: {
+      instant: { details: Record<string, number> };
+      next_1_hours?: { details?: { precipitation_amount?: number } };
+      next_6_hours?: { details?: { precipitation_amount?: number; air_temperature_max?: number; air_temperature_min?: number } };
+    };
+  }[],
+  lat: number,
+  today: string,
+): ForecastDayRaw[] {
+  type Acc = { hours: number; precip: number; tMax: number; tMin: number; tSum: number; rhSum: number; windSum: number; cloudSum: number };
+  const days = new Map<string, Acc>();
+  series.forEach((point, i) => {
+    const next = series[i + 1];
+    const stepH = next ? (Date.parse(next.time) - Date.parse(point.time)) / 3_600_000 : 6;
+    const date = warsawDate.format(new Date(point.time));
+    const d = point.data.instant.details;
+    const acc = days.get(date) ?? { hours: 0, precip: 0, tMax: -Infinity, tMin: Infinity, tSum: 0, rhSum: 0, windSum: 0, cloudSum: 0 };
+    const t = d.air_temperature ?? NaN;
+    acc.hours += stepH;
+    acc.tSum += t * stepH;
+    acc.rhSum += (d.relative_humidity ?? NaN) * stepH;
+    acc.windSum += (d.wind_speed ?? NaN) * stepH;
+    acc.cloudSum += (d.cloud_area_fraction ?? NaN) * stepH;
+    acc.tMax = Math.max(acc.tMax, t, point.data.next_6_hours?.details?.air_temperature_max ?? -Infinity);
+    acc.tMin = Math.min(acc.tMin, t, point.data.next_6_hours?.details?.air_temperature_min ?? Infinity);
+    acc.precip += stepH <= 1.01 ? (point.data.next_1_hours?.details?.precipitation_amount ?? 0) : (point.data.next_6_hours?.details?.precipitation_amount ?? 0);
+    days.set(date, acc);
+  });
+  const out: ForecastDayRaw[] = [];
+  for (const [date, a] of [...days.entries()].sort(([x], [y]) => (x < y ? -1 : 1))) {
+    // Tylko dni pokryte prognozą w większości (pierwszy i ostatni bywają niepełne).
+    if (a.hours < 18 || date < today) continue;
+    const tMean = a.tSum / a.hours;
+    const cloud = Math.min(1, Math.max(0, a.cloudSum / a.hours / 100));
+    const ra = extraterrestrialRadiation(date, lat);
+    const et0 = et0PenmanMonteith({
+      date,
+      latDeg: lat,
+      tMax: a.tMax,
+      tMin: a.tMin,
+      tMean,
+      rhMean: a.rhSum / a.hours,
+      wind2m: (a.windSum / a.hours) * 0.748,
+      rsMj: (0.25 + 0.5 * (1 - cloud)) * ra,
+    });
+    if (!Number.isFinite(tMean) || et0 === null) continue;
+    out.push({
+      date,
+      precipitationMm: Math.round(a.precip * 10) / 10,
+      probabilityPct: null,
+      et0Mm: et0,
+      tMax: Math.round(a.tMax * 10) / 10,
+      tMin: Math.round(a.tMin * 10) / 10,
+      past: false,
+    });
+  }
+  return out;
+}
+
+function metSource(durationMs: number): SourceInfo {
+  return source(
+    'Prognoza opadu i temperatury (ET0 liczone w aplikacji)',
+    'MET Norway – Locationforecast 2.0 (Norweski Instytut Meteorologiczny), CC BY 4.0',
+    'https://api.met.no/weatherapi/locationforecast/2.0/documentation',
+    durationMs,
+    'ET0 policzone wzorem FAO-56 z temperatury, wilgotności, wiatru i zachmurzenia (promieniowanie szacowane). Prognoza – im dalszy dzień, tym większa niepewność.',
+  );
 }

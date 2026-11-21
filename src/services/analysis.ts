@@ -108,7 +108,7 @@ export function observedResult(request: AnalysisRequest, parcel: ParcelInfo, now
       headline: 'Za mało danych do oceny stresu wodnego',
       summary:
         'Dla tej działki nie są jeszcze podłączone dane pogodowe i glebowe, dlatego nie oceniamy niedoboru wody na wybrany dzień. ' +
-        'Ukształtowanie terenu, spływ i wskaźnik NDMI z Sentinel-2 sprawdzisz w sekcji „Teren i spływ”.',
+        'Ukształtowanie terenu, spływ i wskaźnik NDMI z Sentinel-2 sprawdzisz w zakładce „Teren i spływ 3D”.',
       indicators: [],
     },
     historicalVulnerability: {
@@ -120,7 +120,7 @@ export function observedResult(request: AnalysisRequest, parcel: ParcelInfo, now
       indicators: [],
     },
     recommendations: [],
-    irrigation: { status: 'not_calculated', note: 'W tej wersji nie wyliczamy dawek ani terminów nawadniania.' },
+    irrigation: { status: 'not_calculated', note: 'W przykładzie demonstracyjnym nie liczymy dawek – dla prawdziwej działki zakładka podaje, czy i ile nawadniać.' },
     dataSources: [
       {
         ...parcel.source,
@@ -134,7 +134,7 @@ export function observedResult(request: AnalysisRequest, parcel: ParcelInfo, now
         limitations: parcel.source.notes,
         details: `Powierzchnia z geometrii: ${parcel.areaHa.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} ha.`,
       },
-      onDemand('teren', 'nmt', 'Numeryczny Model Terenu', 'GUGiK – Geoportal (WCS)', 'https://www.geoportal.gov.pl', 'Pobierany na żądanie w sekcji „Teren i spływ”.'),
+      onDemand('teren', 'nmt', 'Numeryczny Model Terenu', 'GUGiK – Geoportal (WCS)', 'https://www.geoportal.gov.pl', 'Pobierany przy otwarciu raportu, zakładka „Teren i spływ 3D”.'),
       onDemand('satelita', 's2', 'Sentinel-2 L2A – NDMI', 'Copernicus / Earth Search', 'https://earth-search.aws.element84.com/v1', 'Pobierany na żądanie (przełącznik NDMI w sekcji „Teren i spływ”).'),
       missing('pogoda', 'pogoda', 'Opady i klimatyczny bilans wodny'),
       missing('gleba', 'gleba', 'Gleba i jej podatność na suszę'),

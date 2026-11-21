@@ -1,6 +1,5 @@
 import { Component, Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { cropLabel } from '../data/crops';
-import { STAGE_LABELS, cropDay } from '../data/cropParams';
 import { CropBadge, CropPanel } from './CropPanel';
 import { ReportTabs, TabPanel, type TabDef, type TabId } from './ReportTabs';
 import { ForecastPanel } from './ForecastPanel';
@@ -162,13 +161,15 @@ export function ReportScreen({ request, cachedResult, onChangeParcel, onLoaded, 
   return <Report result={state.result} headingRef={headingRef} />;
 }
 
-function RequestSummary({ request }: { request: AnalysisRequest }) {
+function RequestSummary({ request, showParcel = true }: { request: AnalysisRequest; showParcel?: boolean }) {
   return (
     <dl className="request-summary">
-      <div>
-        <dt>Działka</dt>
-        <dd className="mono">{request.parcelId}</dd>
-      </div>
+      {showParcel && (
+        <div>
+          <dt>Działka</dt>
+          <dd className="mono">{request.parcelId}</dd>
+        </div>
+      )}
       <div>
         <dt>Uprawa</dt>
         <dd>{cropLabel(request.cropId)}</dd>
@@ -200,10 +201,8 @@ function Report({
   const { parcel, request, currentState, historicalVulnerability } = result;
   const retention = result.recommendations.filter((rec) => rec.category === 'retencja');
   const agro = result.recommendations.filter((rec) => rec.category === 'agrotechnika');
-  const cropToday = cropDay(request.cropId, request.analysisDate);
-  const cropStageText = cropToday.inSeason ? STAGE_LABELS[cropToday.stage] : 'poza sezonem uprawy';
-  const [tab, setTab] = useState<TabId>('podsumowanie');
-  const [visited, setVisited] = useState<ReadonlySet<TabId>>(() => new Set<TabId>(['podsumowanie']));
+  const [tab, setTab] = useState<TabId>('sytuacja');
+  const [visited, setVisited] = useState<ReadonlySet<TabId>>(() => new Set<TabId>(['sytuacja']));
   const openTab = (id: TabId) => {
     setTab(id);
     setVisited((prev) => (prev.has(id) ? prev : new Set([...prev, id])));
@@ -218,17 +217,12 @@ function Report({
   }, [result.parcel.id]);
 
   const recCount = result.recommendations.length;
-  const MAIN_STEPS = ['nawadnianie', 'zapas-wystarczy', 'deszcz-wystarczy', 'poza-sezonem', 'opady'];
-  const mainStep =
-    result.forecast?.status === 'ok'
-      ? (result.forecast.steps.find((s) => MAIN_STEPS.includes(s.id)) ?? result.forecast.steps[0] ?? null)
-      : null;
+  // Kolejność jak w wymaganiach KOWR: ocena → uprawa (kontekst oceny) → zalecenia → nawadnianie; dalej teren i źródła.
   const tabs: TabDef[] = [
-    { id: 'podsumowanie', label: 'Podsumowanie', icon: 'home' },
-    { id: 'uprawa', label: 'Uprawa', icon: 'leaf' },
     { id: 'sytuacja', label: 'Sytuacja wodna', icon: 'drop', level: currentState.level },
-    { id: 'prognoza', label: 'Bilans i plan', icon: 'calendar' },
-    { id: 'zalecenia', label: recCount > 0 ? `Co robić (${recCount})` : 'Co robić', icon: 'check' },
+    { id: 'uprawa', label: 'Uprawa', icon: 'leaf' },
+    { id: 'zalecenia', label: recCount > 0 ? `Zalecenia (${recCount})` : 'Zalecenia', icon: 'check' },
+    { id: 'prognoza', label: 'Nawadnianie', icon: 'calendar' },
     { id: 'teren', label: 'Teren i spływ 3D', icon: 'parcels' },
     { id: 'zrodla', label: 'Źródła danych', icon: 'file' },
   ];
@@ -250,7 +244,7 @@ function Report({
             </span>
           </p>
         )}
-        <RequestSummary request={request} />
+        <RequestSummary request={request} showParcel={false} />
         <p className="muted report-header__meta">
           {parcel.locationLabel} · gm. {parcel.commune}, pow. {parcel.county}, woj. {parcel.voivodeship}
           {parcel.areaHa !== null && <> · {parcel.areaHa.toLocaleString('pl-PL')} ha</>} · wygenerowano{' '}
@@ -260,79 +254,10 @@ function Report({
 
       <ReportTabs tabs={tabs} active={tab} onSelect={openTab} />
 
-      <TabPanel id="podsumowanie" active={tab}>
-        <section className="report-summary" aria-labelledby="w-skrocie">
-          <h2 id="w-skrocie">W skrócie</h2>
-          <dl>
-            <div>
-              <dt>Uprawa</dt>
-              <dd>
-                <strong>{cropLabel(request.cropId)}</strong> – {cropStageText}.{' '}
-                <button type="button" className="link-button no-print" onClick={() => openTab('uprawa')}>
-                  Szczegóły i zmiana uprawy
-                </button>
-              </dd>
-            </div>
-            <div>
-              <dt>Czy na polu brakuje wody?</dt>
-              <dd>
-                <RiskBadge level={currentState.level} />
-                <span className="report-summary__headline">{currentState.headline}</span>{' '}
-                <button type="button" className="link-button no-print" onClick={() => openTab('sytuacja')}>
-                  Szczegóły
-                </button>
-              </dd>
-            </div>
-            {mainStep && (
-              <div>
-                <dt>Najbliższy tydzień</dt>
-                <dd>
-                  <strong>{mainStep.when}:</strong> {mainStep.title}.{' '}
-                  <button type="button" className="link-button no-print" onClick={() => openTab('prognoza')}>
-                    Bilans wody i plan
-                  </button>
-                </dd>
-              </div>
-            )}
-            <div>
-              <dt>Co na to wskazuje?</dt>
-              <dd>{currentState.summary}</dd>
-            </div>
-            <div>
-              <dt>Co możesz zrobić?</dt>
-              <dd>
-                {result.recommendations.length > 0 ? (
-                  <ul>
-                    {result.recommendations.map((rec) => (
-                      <li key={rec.id}>{rec.title}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  'Na razie brak zaleceń. Sprawdź, jak spływa woda na działce – w zakładce „Teren i spływ 3D”.'
-                )}
-                <button type="button" className="link-button no-print" onClick={() => openTab('zalecenia')}>
-                  Zobacz zalecenia i nawadnianie
-                </button>
-              </dd>
-            </div>
-          </dl>
-        </section>
-      </TabPanel>
-
-      <TabPanel id="uprawa" active={tab}>
-        <CropPanel
-          request={request}
-          current={currentState}
-          historical={historicalVulnerability}
-          isDemo={result.isDemo}
-          onNavigate={openTab}
-        />
-      </TabPanel>
-
       <TabPanel id="sytuacja" active={tab}>
         <section className="report-section" aria-labelledby="sekcja-sytuacja">
           <h2 id="sekcja-sytuacja" tabIndex={-1}>
-            Sytuacja wodna
+            Sytuacja wodna <CropBadge cropId={request.cropId} />
           </h2>
           <div className="assessment-grid">
             <AssessmentCard
@@ -340,7 +265,6 @@ function Report({
               assessment={currentState}
               sourcesById={sourcesById}
               primary
-              badge={<CropBadge cropId={request.cropId} />}
             />
             <AssessmentCard
               title="Podatność działki na suszę (historycznie)"
@@ -351,7 +275,6 @@ function Report({
               }
               assessment={historicalVulnerability}
               sourcesById={sourcesById}
-              badge={<CropBadge cropId={request.cropId} />}
               extra={
                 historicalVulnerability.criticalMonths.length > 0 && (
                   <p>
@@ -364,14 +287,19 @@ function Report({
         </section>
       </TabPanel>
 
-      <TabPanel id="prognoza" active={tab}>
-        <ForecastPanel forecast={result.forecast} request={request} isDemo={result.isDemo} />
+      <TabPanel id="uprawa" active={tab}>
+        <CropPanel
+          request={request}
+          historical={historicalVulnerability}
+          isDemo={result.isDemo}
+          onNavigate={openTab}
+        />
       </TabPanel>
 
       <TabPanel id="zalecenia" active={tab}>
         <section className="report-section" aria-labelledby="sekcja-dzialania">
           <h2 id="sekcja-dzialania" tabIndex={-1}>
-            Co możesz zrobić
+            Zalecenia: zatrzymanie wody i uprawa
           </h2>
           {currentState.level === 'insufficient_data' && (
             <p className="status status--info">
@@ -420,20 +348,11 @@ function Report({
               </div>
             </div>
           )}
-
-          <div className="irrigation">
-            <h3>
-              Nawadnianie <CropBadge cropId={request.cropId} />
-            </h3>
-            {!result.irrigation || result.irrigation.status === 'not_calculated' ? (
-              <p className="muted">
-                {result.irrigation?.note ?? 'Brak oceny nawadniania.'} Decyzję o nawadnianiu warto omówić z doradcą.
-              </p>
-            ) : (
-              <p>{result.irrigation.summary}</p>
-            )}
-          </div>
         </section>
+      </TabPanel>
+
+      <TabPanel id="prognoza" active={tab}>
+        <ForecastPanel forecast={result.forecast} irrigation={result.irrigation} request={request} isDemo={result.isDemo} />
       </TabPanel>
 
       <TabPanel id="teren" active={tab}>

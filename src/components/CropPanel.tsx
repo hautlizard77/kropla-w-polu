@@ -2,10 +2,9 @@ import { getCrop, cropLabel, isCropId } from '../data/crops';
 import { CROP_PARAMS, STAGE_LABELS, cropDay, cropPhases, dayOfYear, droughtSensitivity, waterDemand, type Stage } from '../data/cropParams';
 import { formatDatePl, formatMonthsPl } from '../lib/dates';
 import { reportHash } from '../lib/route';
-import type { AnalysisRequest, Assessment } from '../types/analysis';
+import type { AnalysisRequest } from '../types/analysis';
 import { CropOptions } from './CropOptions';
 import { Icon } from './Icon';
-import { RiskBadge } from './RiskBadge';
 
 const STAGE_SHORT: Record<Exclude<Stage, 'poza_sezonem'>, string> = {
   poczatkowa: 'Początek',
@@ -34,16 +33,14 @@ export function changeCrop(request: AnalysisRequest, cropId: string) {
 
 export function CropPanel({
   request,
-  current,
   historical,
   isDemo = false,
   onNavigate,
 }: {
   isDemo?: boolean;
-  onNavigate: (tab: 'sytuacja' | 'zalecenia') => void;
+  onNavigate: (tab: 'sytuacja' | 'zalecenia' | 'prognoza') => void;
   request: AnalysisRequest;
-  current: Assessment;
-  historical: Assessment & { criticalMonths: number[] };
+  historical: { criticalMonths: number[] };
 }) {
   const crop = getCrop(request.cropId);
   const params = CROP_PARAMS[request.cropId];
@@ -162,32 +159,21 @@ export function CropPanel({
         </p>
       </figure>
 
-      <div className="crop-results">
-        <p className="crop-results__title">Wyniki liczone dla tej uprawy:</p>
-        <ul>
-          <li>
-            <button type="button" className="link-button" onClick={() => onNavigate('sytuacja')}>
-              Sytuacja na dzień analizy
-            </button>{' '}
-            <RiskBadge level={current.level} />
-          </li>
-          <li>
-            <button type="button" className="link-button" onClick={() => onNavigate('sytuacja')}>
-              Podatność w ostatnich 10 sezonach
-            </button>{' '}
-            <RiskBadge level={historical.level} />
-          </li>
-          <li>
-            <button type="button" className="link-button" onClick={() => onNavigate('zalecenia')}>
-              Zalecenia i nawadnianie
-            </button>
-          </li>
-        </ul>
-        <p className="muted small">
-          Nie zależą od uprawy: teren i spływ, wilgotność z satelity (NDMI), opady i bilans wodny, gleba oraz cieki w pobliżu.
-          Parametry: {params.note}
-        </p>
-      </div>
+      <p className="crop-results muted small">
+        Od uprawy zależą:{' '}
+        <button type="button" className="link-button" onClick={() => onNavigate('sytuacja')}>
+          ocena sytuacji wodnej
+        </button>
+        ,{' '}
+        <button type="button" className="link-button" onClick={() => onNavigate('zalecenia')}>
+          zalecenia
+        </button>{' '}
+        i{' '}
+        <button type="button" className="link-button" onClick={() => onNavigate('prognoza')}>
+          nawadnianie
+        </button>
+        . Teren, gleba, opady i cieki są takie same dla każdej uprawy. Parametry uprawy: {params.note}
+      </p>
     </section>
   );
 }

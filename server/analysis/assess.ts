@@ -19,7 +19,7 @@ import type { HydroResult } from '../sources/hydro';
 import type { SoilProfile } from '../sources/soil';
 import { addDays, type ForecastSeries, type WeatherSeries } from '../sources/weather';
 import { FORECAST_MAX_AGE_DAYS, FORECAST_SOURCE_ID, buildForecast, notApplicableForecast, unavailableForecast } from './forecast';
-import { CROP_PARAMS, STAGE_LABELS, cropDay, type Stage } from '../../src/data/cropParams';
+import { CROP_PARAMS, cropDay, type Stage } from '../../src/data/cropParams';
 import { readilyAvailableWater, totalAvailableWater } from './waterBalance';
 
 export const ASSESS_VERSION = 2;
@@ -203,7 +203,7 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
     retrievedAt: null,
     coverage: null,
     limitations: [],
-    details: 'Pobierany na żądanie w sekcji „Teren i spływ”.',
+    details: 'Pobierany przy otwarciu raportu i pokazywany w zakładce „Teren i spływ 3D”.',
   });
 
   const base: Omit<AnalysisResult, 'currentState' | 'historicalVulnerability' | 'recommendations' | 'irrigation'> = {
@@ -351,7 +351,6 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
     today.dr > today.raw
       ? `Ubytek (${mm(today.dr)}) przekracza próg łatwo dostępnej wody (${mm(today.raw)}) – rośliny mogą ograniczać wzrost.`
       : `Ubytek (${mm(today.dr)}) nie przekracza progu łatwo dostępnej wody (${mm(today.raw)}).`,
-    `Faza uprawy: ${STAGE_LABELS[today.stage]}.`,
   ];
   if (uncertain) summaryParts.push('Wynik jest blisko granicy klas – przy innej retencji gleby ocena byłaby inna; warto sprawdzić wilgotność gleby w terenie.');
   if (evalDate !== request.analysisDate) summaryParts.push(`Ocena na ${formatDate(evalDate)} – ostatni dzień z kompletem danych pogodowych.`);
@@ -448,8 +447,8 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
       id: 'rec-plan',
       category: 'retencja',
       title: 'Zatrzymuj wodę z roztopów i wiosennych opadów',
-      action: 'Spowalniaj odpływ wody z pola wczesną wiosną: obniżenia terenu, pasy zadarnienia, uprawa w poprzek stoku. Miejsca skupienia spływu pokazuje sekcja „Teren i spływ”.',
-      rationale: `W ${deficitSeasons} z ${seasonsCounted} ostatnich sezonów ${cropName} cierpiała na niedobór wody, najczęściej w miesiącach: ${criticalMonths
+      action: 'Spowalniaj odpływ wody z pola wczesną wiosną: obniżenia terenu, pasy zadarnienia, uprawa w poprzek stoku. Miejsca, w których zbiera się spływ, pokazuje zakładka „Teren i spływ 3D”.',
+      rationale: `W ${deficitSeasons} z ${seasonsCounted} ostatnich sezonów uprawa (${cropName}) miała niedobór wody, najczęściej w miesiącach: ${criticalMonths
         .map((m) => ['styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec', 'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień'][m - 1])
         .join(', ')}. Zapas wody zgromadzony wiosną opóźnia ten niedobór.`,
       evidenceSourceIds: ['pogoda0', 'gleba', 'nmt'],

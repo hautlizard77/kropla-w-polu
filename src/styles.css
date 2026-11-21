@@ -3098,8 +3098,9 @@ details > summary:hover {
 .report-tabs__tab {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.45rem;
-  flex: none;
+  flex: 1 1 auto;
   padding: 0.85rem 1rem 0.75rem;
   margin-bottom: -2px;
   border: 0;
@@ -3161,6 +3162,37 @@ details > summary:hover {
 .report-summary dd .link-button {
   display: inline-block;
   margin-top: 0.35rem;
+}
+
+@media (max-width: 1150px) {
+  .report-tabs__tab {
+    gap: 0.3rem;
+    padding: 0.8rem 0.5rem 0.7rem;
+    font-size: 0.92rem;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1023px) {
+  /* Tablet: wszystkie zakładki widoczne w dwóch rzędach po trzy. */
+  .report-tabs {
+    position: static;
+    border-bottom: 0;
+  }
+  .report-tabs__list {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.4rem;
+    overflow: visible;
+  }
+  .report-tabs__tab {
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .report-tabs__tab[aria-selected='true'] {
+    border-color: var(--green-600);
+    box-shadow: inset 0 -3px 0 var(--green-600);
+  }
 }
 
 @media (max-width: 640px) {

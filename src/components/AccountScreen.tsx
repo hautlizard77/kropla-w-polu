@@ -61,7 +61,7 @@ export function AccountScreen({ user, parcelCount, preferences, onSavePreference
         <ul className="profile-card__stats">
           <li>
             <span className="profile-card__value">{parcelCount}</span>
-            <span>działki</span>
+            <span>{parcelCount === 1 ? 'działka' : parcelCount % 10 >= 2 && parcelCount % 10 <= 4 && (parcelCount % 100 < 12 || parcelCount % 100 > 14) ? 'działki' : 'działek'}</span>
           </li>
           <li>
             <span className="profile-card__value">

@@ -199,14 +199,14 @@ export function ParcelMap({ parcels, selectedId, onSelect, highlights = NO_HIGHL
         <div className="map-fallback" role="region" aria-label={ariaLabel}>
           <p className="map-notice" role="status">
             {onSelect
-              ? 'Mapa jest teraz niedostępna. Możesz wpisać identyfikator działki ręcznie albo wybrać działkę z listy poniżej.'
+              ? parcels.length > 0 ? 'Mapa jest teraz niedostępna – wybierz działkę z listy poniżej albo wpisz identyfikator.' : 'Mapa jest teraz niedostępna – wpisz identyfikator działki w formularzu.'
               : 'Mapa jest teraz niedostępna. Poniżej pokazujemy szkic działki bez podkładu mapy.'}
           </p>
           {selected && <SchematicMap parcel={selected} highlights={highlights} title={`Szkic działki ${selected.id}`} />}
         </div>
       )}
 
-      {onSelect && (
+      {onSelect && parcels.length > 0 && (
         <div className="parcel-picker">
           <p className="parcel-picker__label" id={pickerId}>
             {pickerLabel}

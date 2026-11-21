@@ -18,15 +18,6 @@ const NAV: NavItem[] = [
   { id: 'help', label: 'Pomoc', href: HASH.help, icon: 'help' },
 ];
 
-const TITLES: Record<RouteName, string> = {
-  analysis: 'Sprawdź działkę',
-  report: 'Raport',
-  parcels: 'Moje działki',
-  notifications: 'Powiadomienia',
-  account: 'Moje konto',
-  help: 'Pomoc',
-};
-
 /** Raport należy do ścieżki „Sprawdź działkę”. */
 function activeSection(route: RouteName): RouteName {
   return route === 'report' ? 'analysis' : route;
@@ -66,12 +57,6 @@ export function AppShell({
     return () => window.removeEventListener('keydown', onKey);
   }, [menuOpen]);
 
-  const crumbs: { label: string; href?: string }[] =
-    route === 'analysis'
-      ? []
-      : route === 'report'
-        ? [{ label: 'Sprawdź działkę', href: HASH.analysis }, { label: 'Raport' }]
-        : [{ label: 'Sprawdź działkę', href: HASH.analysis }, { label: TITLES[route] }];
 
   return (
     <div className="shell">
@@ -165,21 +150,6 @@ export function AppShell({
 
       <main id="tresc" className="content" tabIndex={-1}>
         <div className="container">
-          {crumbs.length > 0 && (
-            <nav className="breadcrumbs no-print" aria-label="Jesteś tutaj">
-              <ol>
-                {crumbs.map((crumb, index) => (
-                  <li key={crumb.label}>
-                    {crumb.href ? (
-                      <a href={crumb.href}>{crumb.label}</a>
-                    ) : (
-                      <span aria-current={index === crumbs.length - 1 ? 'page' : undefined}>{crumb.label}</span>
-                    )}
-                  </li>
-                ))}
-              </ol>
-            </nav>
-          )}
           {children}
         </div>
       </main>

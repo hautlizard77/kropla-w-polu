@@ -2,7 +2,7 @@ import { useRef, type KeyboardEvent, type ReactNode } from 'react';
 import type { RiskLevel } from '../types/analysis';
 import { Icon, type IconName } from './Icon';
 
-export type TabId = 'podsumowanie' | 'uprawa' | 'sytuacja' | 'prognoza' | 'zalecenia' | 'teren' | 'zrodla';
+export type TabId = 'sytuacja' | 'uprawa' | 'zalecenia' | 'prognoza' | 'teren' | 'zrodla';
 
 export interface TabDef {
   id: TabId;

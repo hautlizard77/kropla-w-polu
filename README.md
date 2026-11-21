@@ -79,8 +79,8 @@ widać przy dzwonku i w menu. Dodane działki, przeczytane powiadomienia i ustaw
     Gdy nie wczytają się kafelki podkładu, pojawia się komunikat, a granice działek dalej są widoczne.
     Formularz i przykłady działają bez mapy.
 - **Raport** (`#/raport?dzialka=…&uprawa=…&data=…`): ma własny adres, więc działa odświeżanie, przycisk „Wstecz” i udostępnianie linku.
-  Raport jest podzielony na zakładki: Podsumowanie, Uprawa, Sytuacja wodna, Bilans i plan, Co robić, Teren i spływ 3D, Źródła danych
-  (strzałki ←/→ przełączają zakładki; na telefonie zakładki są siatką 2 × 3; wydruk zawiera wszystkie zakładki po kolei).
+  Raport jest podzielony na 6 zakładek w kolejności z wymagań KOWR: Sytuacja wodna, Uprawa, Zalecenia, Nawadnianie, Teren i spływ 3D, Źródła danych
+  (strzałki ←/→ przełączają zakładki; na komputerze jeden rząd, na tablecie siatka 3 × 2, na telefonie 2 × 3; wydruk zawiera wszystkie zakładki po kolei).
   Teren pobiera się w tle od otwarcia raportu.
   1. **Sytuacja wodna**: ocena na wybrany dzień, wskaźniki z datami obserwacji i oddzielna ocena historycznej podatności działki.
   2. **Co możesz zrobić**: zalecenia retencyjne i agrotechniczne (działanie, uzasadnienie oparte na danych, rzeczy do sprawdzenia w terenie)
@@ -110,7 +110,7 @@ parametry w `src/data/cropParams.ts`. Raport ma sekcję „Twoja uprawa”: faza
 głębokość korzeni, wrażliwość na suszę, kalendarz sezonu z miesiącami niedoborów i przełącznik do porównania z inną uprawą.
 Wyniki zależne od uprawy mają oznaczenie „Zależy od uprawy”.
 
-**Bilans i plan (zakładka „Bilans i plan”):** dla analizy na dziś (lub jeden z 3 ostatnich dni) serwer pobiera z Open-Meteo
+**Nawadnianie (zakładka „Nawadnianie”):** dla analizy na dziś (lub jeden z 3 ostatnich dni) serwer pobiera z Open-Meteo
 prognozę na 10 dni (opad, ET0, temperatura) i liczy dalszy ciąg bilansu wody od stanu gleby na dzień analizy
 (`server/analysis/forecast.ts`). Zakładka nie pokazuje pogody dzień po dniu, tylko rachunek na 7 dni:
 zapas wody w glebie teraz + opad, który zostanie w strefie korzeni (nadmiar ponad pojemność gleby jest liczony jako stracony)

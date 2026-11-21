@@ -131,7 +131,7 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
             <Field
               id={ids.parcelId}
               label="Identyfikator działki ewidencyjnej"
-              hint="Znajdziesz go w wypisie z ewidencji gruntów lub na Geoportalu. Możesz też kliknąć działkę na mapie."
+              hint="Np. 040706_4.0001.9 – znajdziesz go w wypisie z ewidencji gruntów albo na Geoportalu."
               message={fieldMessage('parcelId')}
             >
               <input
@@ -232,7 +232,11 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
 
         <section className="card map-card" aria-labelledby="tytul-mapy">
           <h2 id="tytul-mapy">Mapa</h2>
-          <p className="muted">Kliknij działkę na mapie albo wybierz ją z listy, aby wpisać jej identyfikator do formularza.</p>
+          <p className="muted">
+            {mapParcels.length > 0
+              ? 'Kliknij swoją działkę na mapie, a jej identyfikator trafi do formularza.'
+              : 'Tu pojawią się działki dodane w „Moje działki” – kliknięcie wpisze identyfikator do formularza.'}
+          </p>
           <ParcelMap
             parcels={mapParcels}
             selectedId={mapParcels.some((parcel) => parcel.id === normalizedParcelId) ? normalizedParcelId : null}

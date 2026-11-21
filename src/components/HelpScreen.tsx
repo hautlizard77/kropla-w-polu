@@ -75,7 +75,7 @@ const QUESTIONS: Question[] = [
           <dt>
             <RiskBadge level="elevated" />
           </dt>
-          <dd>Roślinom brakuje wody albo wkrótce zabraknie. Zobacz część „Co możesz zrobić”.</dd>
+          <dd>Roślinom brakuje wody albo wkrótce zabraknie. Zobacz zakładki „Zalecenia” i „Nawadnianie”.</dd>
         </div>
         <div>
           <dt>
@@ -106,7 +106,7 @@ const QUESTIONS: Question[] = [
     answer: (
       <p>
         Do oceny potrzebne są dane o pogodzie, glebie i zdjęcia satelitarne. Gdy którychś brakuje (np. pole było zasłonięte chmurami),
-        raport nie wystawia oceny. Nadal możesz sprawdzić ukształtowanie terenu i spływ wody w części „Teren i spływ”.
+        raport nie wystawia oceny. Nadal możesz sprawdzić ukształtowanie terenu i spływ wody w zakładce „Teren i spływ 3D”.
       </p>
     ),
   },
@@ -167,7 +167,7 @@ const QUESTIONS: Question[] = [
       <>
         <p>
           Granice działek pochodzą z ewidencji (GUGiK, usługa ULDK), ukształtowanie terenu z Geoportalu, a zdjęcia satelitarne z programu
-          Copernicus (Sentinel-2). Każdy raport podaje źródło, datę obserwacji i datę pobrania – w części „Na czym opiera się wynik”.
+          Copernicus (Sentinel-2). Każdy raport podaje źródło, datę obserwacji i datę pobrania – w zakładce „Źródła danych”.
         </p>
         <p>Przykładowe działki z konta pokazowego mają dane przykładowe – jest to wyraźnie oznaczone w raporcie.</p>
       </>

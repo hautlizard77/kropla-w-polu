@@ -283,7 +283,7 @@ const kujawyScenario: DemoScenario = {
     ],
     irrigation: {
       status: 'not_calculated',
-      note: 'W tej wersji nie wyliczamy dawek ani terminów nawadniania.',
+      note: 'W przykładzie demonstracyjnym nie liczymy dawek – dla prawdziwej działki zakładka podaje, czy i ile nawadniać.',
     },
     dataSources: kujawySources,
     limitations: [
@@ -526,7 +526,7 @@ const lubelskieScenario: DemoScenario = {
     ],
     irrigation: {
       status: 'not_calculated',
-      note: 'W tej wersji nie wyliczamy dawek ani terminów nawadniania.',
+      note: 'W przykładzie demonstracyjnym nie liczymy dawek – dla prawdziwej działki zakładka podaje, czy i ile nawadniać.',
     },
     dataSources: lubelskieSources,
     limitations: [
@@ -748,7 +748,7 @@ const wielkopolskaScenario: DemoScenario = {
     ],
     irrigation: {
       status: 'not_calculated',
-      note: 'W tej wersji nie wyliczamy dawek ani terminów nawadniania.',
+      note: 'W przykładzie demonstracyjnym nie liczymy dawek – dla prawdziwej działki zakładka podaje, czy i ile nawadniać.',
     },
     dataSources: wielkopolskaSources,
     limitations: [

@@ -11,7 +11,7 @@
  * dawka nawadniania 10–30 mm (więcej woda przesiąka poniżej korzeni), co najmniej 3 dni między dawkami.
  */
 import { cropLabel, getCrop } from '../../src/data/crops';
-import { CROP_PARAMS, STAGE_LABELS, cropDay, type Stage } from '../../src/data/cropParams';
+import { CROP_PARAMS, cropDay, type Stage } from '../../src/data/cropParams';
 import type { AnalysisRequest, ForecastBalance, ForecastStep, IrrigationEvent, IrrigationPlan, WaterForecast } from '../../src/types/analysis';
 import type { SoilProfile } from '../sources/soil';
 import type { ForecastDayRaw, ForecastSeries } from '../sources/weather';
@@ -283,10 +283,8 @@ function buildSteps(ctx: {
         : `Jeśli masz deszczownię: ${e0.doseMm} mm (${fmt(e0.m3PerHa)} m³/ha)`,
       text:
         (waitForRain ? 'Do tego dnia wstrzymaj się – wcześniej spadnie deszcz. ' : '') +
-        `Dawka ${e0.doseMm} mm to ${fmt(e0.m3PerHa)} m³ wody na hektar${parcelM3(e0.doseMm)}. Podawaj rano lub wieczorem. ` +
-        (later ? `Według prognozy kolejne dawki: ${later}. ` : '') +
-        `Razem w ${plan.horizonDays} dni: ${plan.totalMm} mm (${fmt(plan.totalM3PerHa)} m³/ha${areaHa ? `, ${fmt(plan.totalM3Parcel ?? 0)} m³ na działkę` : ''}). ` +
-        'Przed każdą dawką sprawdź prognozę – jeśli zapowiadany deszcz się zmieni, plan też się zmieni.',
+        `To ${fmt(e0.m3PerHa)} m³ wody na hektar${parcelM3(e0.doseMm)}. Podawaj rano lub wieczorem.` +
+        (later ? ' Kolejne dawki – w tabeli „Plan nawadniania” poniżej.' : ''),
     });
     if (!plan.typicallyIrrigated) {
       steps.push({
@@ -330,7 +328,7 @@ function buildSteps(ctx: {
       when: MONTHS_NOM[month - 1]!,
       tone: 'info',
       title: 'Okres największej wrażliwości uprawy',
-      text: `${cropLabel(request.cropId)}: ${STAGE_LABELS[first.stage]}. Niedobór wody teraz najmocniej obniża plon – jeśli wody jest mało, tej uprawie przeznacz ją w pierwszej kolejności.`,
+      text: 'Niedobór wody w tym miesiącu najmocniej obniża plon – jeśli wody jest mało, przeznacz ją tej uprawie w pierwszej kolejności.',
     });
   }
 

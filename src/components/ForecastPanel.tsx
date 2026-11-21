@@ -1,7 +1,7 @@
 import { cropLabel } from '../data/crops';
 import { formatDateTimePl, todayInPoland } from '../lib/dates';
 import { reportHash } from '../lib/route';
-import type { AnalysisRequest, ForecastBalance, ForecastStep, IrrigationPlan, WaterForecast } from '../types/analysis';
+import type { AnalysisRequest, AnalysisResult, ForecastBalance, ForecastStep, IrrigationPlan, WaterForecast } from '../types/analysis';
 import { CropBadge } from './CropPanel';
 import { Icon } from './Icon';
 import { RiskBadge } from './RiskBadge';
@@ -10,23 +10,35 @@ const WEEKDAYS = ['niedz.', 'pon.', 'wt.', 'śr.', 'czw.', 'pt.', 'sob.'];
 const shortDate = (iso: string) => `${WEEKDAYS[new Date(`${iso}T12:00:00Z`).getUTCDay()]} ${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
 const n = (v: number) => v.toLocaleString('pl-PL');
 
-export function ForecastPanel({ forecast, request, isDemo }: { forecast: WaterForecast | undefined; request: AnalysisRequest; isDemo: boolean }) {
+export function ForecastPanel({
+  forecast,
+  irrigation,
+  request,
+  isDemo,
+}: {
+  forecast: WaterForecast | undefined;
+  irrigation: AnalysisResult['irrigation'];
+  request: AnalysisRequest;
+  isDemo: boolean;
+}) {
   const crop = cropLabel(request.cropId).toLowerCase();
   return (
     <section className="report-section forecast" aria-labelledby="sekcja-prognoza">
       <h2 id="sekcja-prognoza" tabIndex={-1}>
-        Bilans wody na najbliższy tydzień i plan działań
+        Nawadnianie i bilans wody ({crop}) <CropBadge cropId={request.cropId} />
       </h2>
-      <p className="forecast__lead">
-        Ile wody potrzebuje uprawa ({crop}), ile spadnie i ile zostanie w glebie – a z tego, co zrobić i kiedy.{' '}
-        <CropBadge cropId={request.cropId} />
-      </p>
 
       {!forecast || forecast.status !== 'ok' ? (
         <div className="status status--info">
+          {irrigation && (
+            <p>
+              <strong>Na dzień analizy: </strong>
+              {irrigation.status === 'calculated' ? irrigation.summary : `${irrigation.note} Decyzję o nawadnianiu warto omówić z doradcą.`}
+            </p>
+          )}
           <p>
             {forecast?.message ??
-              'Bilans na najbliższe dni liczymy dla działek analizowanych na dzisiejszą datę (przykłady demonstracyjne dotyczą minionych lat).'}
+              'Bilans i plan na kolejne dni liczymy z prognozy pogody, więc tylko dla analizy na dziś (przykłady demonstracyjne dotyczą minionych lat).'}
           </p>
           {!isDemo && (!forecast || forecast.status === 'not_applicable') && (
             <a className="btn btn--small btn--secondary no-print" href={reportHash({ ...request, analysisDate: todayInPoland() })}>
@@ -36,7 +48,7 @@ export function ForecastPanel({ forecast, request, isDemo }: { forecast: WaterFo
         </div>
       ) : (
         <>
-          {forecast.balance && <BalanceSheet balance={forecast.balance} plan={forecast.irrigationPlan} />}
+          {forecast.balance && <BalanceSheet balance={forecast.balance} />}
 
           <h3>Co zrobić i kiedy</h3>
           <ol className="forecast-steps">
@@ -48,9 +60,9 @@ export function ForecastPanel({ forecast, request, isDemo }: { forecast: WaterFo
           {forecast.irrigationPlan && forecast.irrigationPlan.events.length > 0 && <IrrigationTable plan={forecast.irrigationPlan} />}
 
           <p className="muted small">
-            {forecast.message} Prognoza opadu i parowania: Open-Meteo, {forecast.issuedAt ? formatDateTimePl(forecast.issuedAt) : '–'}. Bilans
-            liczony modelem FAO-56 od stanu gleby na dzień analizy. Prognoza opadów na dalsze dni jest niepewna (zwłaszcza burze) –
-            plan zmienia się razem z nią, więc sprawdzaj go przed każdym zabiegiem.
+            Prognoza: Open-Meteo, {forecast.issuedAt ? formatDateTimePl(forecast.issuedAt) : '–'}; model bilansu FAO-56 od stanu gleby
+            na dzień analizy. Dalsze dni prognozy są mniej pewne (zwłaszcza burze) – plan zmienia się razem z nią, więc sprawdź go
+            przed każdym zabiegiem.
           </p>
         </>
       )}
@@ -58,7 +70,7 @@ export function ForecastPanel({ forecast, request, isDemo }: { forecast: WaterFo
   );
 }
 
-function BalanceSheet({ balance: b, plan }: { balance: ForecastBalance; plan: IrrigationPlan | null }) {
+function BalanceSheet({ balance: b }: { balance: ForecastBalance }) {
   const period = `${shortDate(b.from)} – ${shortDate(b.to)}`;
   return (
     <div className="balance">
@@ -109,19 +121,6 @@ function BalanceSheet({ balance: b, plan }: { balance: ForecastBalance; plan: Ir
           <dt>Dni z niedoborem (bez nawadniania)</dt>
           <dd>
             {b.stressDays} z {b.horizonDays}
-          </dd>
-        </div>
-        <div>
-          <dt>Woda do dodania, żeby uniknąć stresu</dt>
-          <dd>
-            {plan && plan.totalMm > 0 ? (
-              <>
-                {plan.totalMm} mm · {n(plan.totalM3PerHa)} m³/ha
-                {plan.totalM3Parcel !== null && <span className="muted small"> · {n(plan.totalM3Parcel)} m³ na działkę</span>}
-              </>
-            ) : (
-              'nie trzeba'
-            )}
           </dd>
         </div>
       </dl>

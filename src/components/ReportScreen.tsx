@@ -13,7 +13,8 @@ import type {
   Indicator,
   Recommendation,
 } from '../types/analysis';
-import { ImportantNotice, Steps } from './Layout';
+import { Icon } from './Icon';
+import { Steps } from './Layout';
 import { ParcelMap, type MapParcel } from './ParcelMap';
 import { RiskBadge } from './RiskBadge';
 import { SchematicMap } from './SchematicMap';
@@ -174,14 +175,18 @@ function Report({
     <article className="report" aria-labelledby="tytul-raportu">
       <header className="report-header">
         <Steps current={2} />
+        <p className="print-only print-brand">Woda na polu · raport sytuacji wodnej działki</p>
         <p className="eyebrow">Raport sytuacji wodnej</p>
         <h1 id="tytul-raportu" ref={headingRef} tabIndex={-1}>
           Działka {parcel.id}
         </h1>
         {result.isDemo && (
-          <ImportantNotice title="Dane demonstracyjne">
-            <p>Wartości, granice działki i zalecenia są ilustracyjne – nie opisują rzeczywistej działki.</p>
-          </ImportantNotice>
+          <p className="data-note">
+            <Icon name="info" size={18} />
+            <span>
+              <strong>Dane przykładowe.</strong> Wartości i granice działki w tym raporcie są ilustracyjne.
+            </span>
+          </p>
         )}
         <RequestSummary request={request} />
         <p className="muted report-header__meta">
@@ -194,7 +199,7 @@ function Report({
             Zmień działkę
           </button>
           <button type="button" className="btn btn--primary" onClick={() => window.print()}>
-            Drukuj lub zapisz PDF
+            <Icon name="printer" size={18} /> Drukuj lub zapisz PDF
           </button>
         </div>
       </header>
@@ -322,7 +327,7 @@ function Report({
                   </td>
                   <td>{source.observationDate ? formatDatePl(source.observationDate) : '—'}</td>
                   <td>{source.coverage ? formatRangePl(source.coverage) : '—'}</td>
-                  <td>{source.retrievedAt ? formatDatePl(source.retrievedAt) : result.isDemo ? 'nie pobrano (demo)' : '—'}</td>
+                  <td>{source.retrievedAt ? formatDatePl(source.retrievedAt) : '—'}</td>
                 </tr>
               ))}
             </tbody>

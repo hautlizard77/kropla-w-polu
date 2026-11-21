@@ -17,6 +17,13 @@ export type FieldErrors = Partial<Record<keyof FormValues, string>>;
  */
 const PARCEL_ID = /^\d{6}_\d\.\d{4}(\.AR_\d+)?\.\d+[A-Za-z]?(\/\d+[A-Za-z]?)?$/;
 
+export function isValidParcelId(value: string): boolean {
+  return PARCEL_ID.test(value);
+}
+
+export const PARCEL_ID_FORMAT_ERROR =
+  'To nie wygląda na identyfikator działki ewidencyjnej. Wzór: 040705_5.0012.245/3 (kod gminy_obręb.numer działki).';
+
 export function normalizeParcelId(value: string): string {
   return value.trim().replace(/\s+/g, '');
 }
@@ -31,8 +38,7 @@ export function validateForm(
   if (!parcelId) {
     errors.parcelId = 'Podaj identyfikator działki albo wskaż działkę na mapie.';
   } else if (!PARCEL_ID.test(parcelId)) {
-    errors.parcelId =
-      'To nie wygląda na identyfikator działki ewidencyjnej. Wzór: 040705_5.0012.245/3 (kod gminy_obręb.numer działki).';
+    errors.parcelId = PARCEL_ID_FORMAT_ERROR;
   }
 
   if (!values.cropId) {

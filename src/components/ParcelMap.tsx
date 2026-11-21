@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { centerOf } from '../data/geometry';
 import type { PolygonGeometry } from '../types/analysis';
 import { loadLeaflet, type Leaflet } from './leafletLoader';
@@ -7,6 +7,8 @@ import { SchematicMap } from './SchematicMap';
 export interface MapParcel {
   id: string;
   label: string;
+  /** Krótki opis na przycisku pod mapą; domyślnie identyfikator działki. */
+  chipLabel?: string;
   geometry: PolygonGeometry;
 }
 
@@ -18,6 +20,8 @@ interface Props {
   /** Dodatkowe obszary, np. sugerowane miejsce zatrzymania wody. */
   highlights?: { label: string; geometry: PolygonGeometry }[];
   ariaLabel: string;
+  /** Etykieta listy działek pod mapą (dostępna z klawiatury). */
+  pickerLabel?: string;
 }
 
 type Mode = 'loading' | 'leaflet' | 'fallback';
@@ -35,7 +39,7 @@ const COLORS = {
   area: '#1f6fa8',
 };
 
-export function ParcelMap({ parcels, selectedId, onSelect, highlights = NO_HIGHLIGHTS, ariaLabel }: Props) {
+export function ParcelMap({ parcels, selectedId, onSelect, highlights = NO_HIGHLIGHTS, ariaLabel, pickerLabel = 'Twoje działki:' }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import('leaflet').Map | null>(null);
   const layerRef = useRef<import('leaflet').LayerGroup | null>(null);
@@ -43,6 +47,7 @@ export function ParcelMap({ parcels, selectedId, onSelect, highlights = NO_HIGHL
   const onSelectRef = useRef(onSelect);
   const [mode, setMode] = useState<Mode>('loading');
   const [tilesFailed, setTilesFailed] = useState(false);
+  const pickerId = useId();
 
   useEffect(() => {
     onSelectRef.current = onSelect;
@@ -181,7 +186,7 @@ export function ParcelMap({ parcels, selectedId, onSelect, highlights = NO_HIGHL
       {mode === 'leaflet' && tilesFailed && (
         <p className="map-notice" role="status">
           Nie udało się wczytać podkładu mapy. Granice działek są widoczne na pustym tle. Identyfikator możesz też wpisać
-          ręcznie, a przykłady działają bez mapy.
+          ręcznie, a lista działek działa bez mapy.
         </p>
       )}
 
@@ -198,10 +203,10 @@ export function ParcelMap({ parcels, selectedId, onSelect, highlights = NO_HIGHL
 
       {onSelect && (
         <div className="parcel-picker">
-          <p className="parcel-picker__label" id="lista-dzialek">
-            Przykładowe działki:
+          <p className="parcel-picker__label" id={pickerId}>
+            {pickerLabel}
           </p>
-          <ul aria-labelledby="lista-dzialek">
+          <ul aria-labelledby={pickerId}>
             {parcels.map((parcel) => (
               <li key={parcel.id}>
                 <button
@@ -210,7 +215,7 @@ export function ParcelMap({ parcels, selectedId, onSelect, highlights = NO_HIGHL
                   aria-pressed={parcel.id === selectedId}
                   onClick={() => onSelect(parcel.id)}
                 >
-                  <span className="mono">{parcel.id}</span>
+                  {parcel.chipLabel ? <span>{parcel.chipLabel}</span> : <span className="mono">{parcel.id}</span>}
                 </button>
               </li>
             ))}

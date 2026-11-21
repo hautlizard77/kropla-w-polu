@@ -47,7 +47,7 @@ export function analyzeWithDemoScenarios(request: AnalysisRequest, now: Date = n
       unavailable: {
         reason: 'unknown_parcel',
         message:
-          'W tej wersji aplikacji nie ma jeszcze analizy dla tej działki. Działają tylko oznaczone przykłady demonstracyjne.',
+          'Dla tej działki nie mamy jeszcze danych do analizy. Sprawdź identyfikator albo wybierz działkę z mapy.',
         hint: null,
       },
     };
@@ -68,7 +68,7 @@ export function analyzeWithDemoScenarios(request: AnalysisRequest, now: Date = n
       status: 'unavailable',
       unavailable: {
         reason: 'date_mismatch',
-        message: `Dla tej działki przykład obejmuje tylko dzień ${formatDatePl(scenario.request.analysisDate)}. Dla innej daty nie ma jeszcze analizy.`,
+        message: `Dla tej działki dane obejmują dzień ${formatDatePl(scenario.request.analysisDate)}. Dla innej daty nie mamy jeszcze danych.`,
         hint: { field: 'analysisDate', value: scenario.request.analysisDate, label: formatDatePl(scenario.request.analysisDate) },
       },
     };
@@ -77,7 +77,7 @@ export function analyzeWithDemoScenarios(request: AnalysisRequest, now: Date = n
     status: 'unavailable',
     unavailable: {
       reason: 'crop_mismatch',
-      message: `Dla tej działki przykład dotyczy uprawy „${cropLabel(scenario.request.cropId)}”. Dla innej uprawy nie ma jeszcze analizy.`,
+      message: `Dla tej działki dane dotyczą uprawy „${cropLabel(scenario.request.cropId)}”. Dla innej uprawy nie mamy jeszcze danych.`,
       hint: { field: 'cropId', value: scenario.request.cropId, label: cropLabel(scenario.request.cropId) },
     },
   };

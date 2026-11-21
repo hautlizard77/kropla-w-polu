@@ -1,11 +1,13 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { CROPS, cropLabel } from '../data/crops';
 import { DEMO_PARCELS, DEMO_SCENARIOS, type DemoScenario } from '../data/demoScenarios';
 import { earliestAnalysisDate, formatDatePl, todayInPoland } from '../lib/dates';
 import { normalizeParcelId, validateForm, type FieldErrors, type FormValues } from '../lib/validation';
 import { AnalysisError, analyzeParcel } from '../services/analysis';
 import type { AnalysisRequest, AnalysisResult, AnalysisUnavailable } from '../types/analysis';
-import { ImportantNotice, Steps } from './Layout';
+import type { ParcelSummary } from '../types/account';
+import { PageHeader } from './AppShell';
+import { Steps } from './Layout';
 import { ParcelMap, type MapParcel } from './ParcelMap';
 
 interface Props {
@@ -13,6 +15,8 @@ interface Props {
   onValuesChange: (values: FormValues) => void;
   onResult: (result: AnalysisResult) => void;
   simulateError: boolean;
+  /** Działki użytkownika – do wyboru na mapie i z listy. */
+  savedParcels: ParcelSummary[];
 }
 
 type Status =
@@ -21,13 +25,16 @@ type Status =
   | { kind: 'unavailable'; unavailable: AnalysisUnavailable }
   | { kind: 'error'; message: string };
 
-const MAP_PARCELS: MapParcel[] = DEMO_PARCELS.map(({ parcel, scenario }) => ({
-  id: parcel.id,
-  label: `${parcel.id} – ${scenario.title}`,
-  geometry: parcel.geometry,
-}));
-
-export function AnalysisScreen({ values, onValuesChange, onResult, simulateError }: Props) {
+export function AnalysisScreen({ values, onValuesChange, onResult, simulateError, savedParcels }: Props) {
+  const mapParcels = useMemo<MapParcel[]>(
+    () =>
+      savedParcels.flatMap((item) =>
+        item.parcel
+          ? [{ id: item.saved.parcelId, label: `${item.saved.name} (${item.saved.parcelId})`, chipLabel: item.saved.name, geometry: item.parcel.geometry }]
+          : [],
+      ),
+    [savedParcels],
+  );
   const [errors, setErrors] = useState<FieldErrors>({});
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const abortRef = useRef<AbortController | null>(null);
@@ -117,21 +124,11 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
 
   return (
     <div className="analysis">
-      <section className="intro" aria-labelledby="tytul-analizy">
-        <Steps current={1} />
-        <h1 id="tytul-analizy" tabIndex={-1}>
-          Sprawdź, czy Twojemu polu brakuje wody
-        </h1>
-        <p className="lead">
-          Wskaż działkę, wybierz uprawę i dzień. Dowiesz się, czy na polu występuje niedobór wody, co go powoduje
-          i jak możesz zatrzymać wodę na swojej ziemi.
-        </p>
-        <ul className="intro__facts">
-          <li>Bez logowania i zakładania konta</li>
-          <li>Raport do wydruku lub zapisu w PDF</li>
-          <li>Wynik do omówienia z doradcą rolnym</li>
-        </ul>
-      </section>
+      <Steps current={1} />
+      <PageHeader
+        title="Sprawdź, czy Twojemu polu brakuje wody"
+        description="Wskaż działkę, wybierz uprawę i dzień. Dowiesz się, czy na polu występuje niedobór wody, co go powoduje i jak możesz zatrzymać wodę na swojej ziemi."
+      />
 
       <div className="analysis__grid">
         <section className="card form-card" aria-labelledby="tytul-formularza">
@@ -162,12 +159,12 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
             {selectedDemo && !(selectedDemo.request.cropId === values.cropId && selectedDemo.request.analysisDate === values.analysisDate) && (
               <div className="inline-hint" role="note">
                 <p>
-                  To działka z przykładu demonstracyjnego. Analiza jest dostępna dla uprawy{' '}
+                  Dla tej działki dostępna jest analiza dla uprawy{' '}
                   <strong>{cropLabel(selectedDemo.request.cropId)}</strong> i dnia{' '}
                   <strong>{formatDatePl(selectedDemo.request.analysisDate)}</strong>.
                 </p>
                 <button type="button" className="btn btn--small btn--secondary" onClick={() => applyScenarioInputs(selectedDemo)}>
-                  Ustaw dane przykładu
+                  Ustaw te dane
                 </button>
               </div>
             )}
@@ -225,7 +222,7 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
               {unavailable && (
                 <p className="status status--info">
                   Nie ma analizy dla tego zestawu danych. Dane formularza zostały zachowane – możesz je poprawić albo
-                  otworzyć jeden z przykładów poniżej.
+                  wybrać działkę na mapie.
                 </p>
               )}
             </div>
@@ -244,55 +241,16 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
 
         <section className="card map-card" aria-labelledby="tytul-mapy">
           <h2 id="tytul-mapy">Mapa</h2>
-          <p className="muted">Kliknij jedną z przykładowych działek, aby wpisać jej identyfikator do formularza.</p>
+          <p className="muted">Kliknij działkę na mapie albo wybierz ją z listy, aby wpisać jej identyfikator do formularza.</p>
           <ParcelMap
-            parcels={MAP_PARCELS}
-            selectedId={selectedDemo ? normalizedParcelId : null}
+            parcels={mapParcels}
+            selectedId={mapParcels.some((parcel) => parcel.id === normalizedParcelId) ? normalizedParcelId : null}
             onSelect={selectOnMap}
-            ariaLabel="Mapa z przykładowymi działkami"
+            ariaLabel="Mapa z Twoimi działkami"
           />
         </section>
       </div>
 
-      <section className="examples" aria-labelledby="tytul-przykladow">
-        <h2 id="tytul-przykladow">Przykłady</h2>
-        <ImportantNotice title="Dane demonstracyjne">
-          <p>
-            W tej wersji analiza działa tylko dla trzech przykładów. Dane, granice działek i zalecenia są ilustracyjne.
-          </p>
-        </ImportantNotice>
-        <ul className="example-list">
-          {DEMO_SCENARIOS.map((scenario) => (
-            <li key={scenario.id} className="example">
-              <h3>{scenario.title}</h3>
-              <p>{scenario.summary}</p>
-              <dl className="example__meta">
-                <div>
-                  <dt>Działka</dt>
-                  <dd className="mono">{scenario.request.parcelId}</dd>
-                </div>
-                <div>
-                  <dt>Uprawa</dt>
-                  <dd>{cropLabel(scenario.request.cropId)}</dd>
-                </div>
-                <div>
-                  <dt>Data</dt>
-                  <dd>{formatDatePl(scenario.request.analysisDate)}</dd>
-                </div>
-              </dl>
-              <button
-                type="button"
-                className="btn btn--small btn--secondary"
-                onClick={() => tryExample(scenario)}
-                disabled={isLoading}
-                aria-label={`Otwórz raport: ${scenario.title}`}
-              >
-                Otwórz raport
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
     </div>
   );
 }

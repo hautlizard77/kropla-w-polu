@@ -39,7 +39,25 @@ Każdy push na `main` jest sprawdzany w GitHub Actions (typy + build), a gotowa 
 Zbudowana aplikacja (`dist/`) to statyczne pliki z względnymi ścieżkami (`base: './'`), więc można ją umieścić
 na dowolnym hostingu statycznym. Rolnik nie musi niczego instalować, wystarczy przeglądarka.
 
-## Co działa w tej iteracji
+## Aplikacja
+
+Użytkownik jest stale zalogowany na fikcyjne konto (Jan Nowak, Gospodarstwo Rolne Nowak). Logowania nie ma.
+Konto, działki i powiadomienia są zdefiniowane w [`src/data/account.ts`](src/data/account.ts).
+
+| Zakładka | Adres | Co zawiera |
+|---|---|---|
+| Panel główny | `#/` | powitanie, kafle podsumowania (działki, wymagające uwagi, nowe powiadomienia, ostatnia analiza), stan działek, mapa działek, ostatnie powiadomienia |
+| Moje działki | `#/dzialki` | karty działek ze szkicem, położeniem, uprawą i oceną; dodawanie i usuwanie własnych działek; „Nowa analiza” z wypełnionym formularzem |
+| Nowa analiza | `#/analiza` | formularz i mapa (opis niżej) |
+| Raport | `#/raport?dzialka=…&uprawa=…&data=…` | raport sytuacji wodnej (opis niżej) |
+| Powiadomienia | `#/powiadomienia` | lista z filtrem „Wszystkie / Nieprzeczytane”, oznaczanie jako przeczytane, linki do raportów |
+| Konto | `#/konto` | profil, dane gospodarstwa, ustawienia powiadomień (kanały i tematy) |
+
+Na komputerze nawigacja jest w menu bocznym, a na telefonie w dolnym pasku. Licznik nieprzeczytanych powiadomień
+widać przy dzwonku i w menu. Dodane działki, przeczytane powiadomienia i ustawienia są zapisywane w pamięci przeglądarki
+(`localStorage`). Gdy pamięć jest niedostępna, aplikacja działa na wartościach domyślnych.
+
+## Analiza i raport
 
 - **Ekran analizy**: formularz z identyfikatorem działki, uprawą i datą analizy oraz interaktywna mapa (Leaflet + OpenStreetMap).
   - Działkę można wpisać ręcznie albo kliknąć na mapie lub na liście przykładowych działek. Wybór aktualizuje formularz i zaznaczenie.
@@ -58,7 +76,7 @@ na dowolnym hostingu statycznym. Rolnik nie musi niczego instalować, wystarczy 
   3. **Na czym opiera się wynik**: tabela źródeł (rodzaj, źródło, stan danych, data obserwacji, zakres, data pobrania)
      z rozwijanymi szczegółami, licencjami i ograniczeniami.
   - „Drukuj lub zapisz PDF” używa natywnego wydruku przeglądarki. Style wydruku ukrywają nawigację i przyciski,
-    rozwijają szczegóły i zastępują mapę z kafelkami szkicem SVG. Etykieta „Dane demonstracyjne” jest widoczna także na wydruku.
+    rozwijają szczegóły i zastępują mapę z kafelkami szkicem SVG. Oznaczenie „Dane przykładowe” jest widoczne także na wydruku.
 - **Dostępność**: etykiety pól, powiązane komunikaty błędów (`aria-describedby`, `aria-invalid`), widoczny fokus,
   link „Przejdź do treści”, nawigacja klawiaturą (lista działek jako przyciski, bo mapa nie jest dostępna z klawiatury),
   komunikaty stanu w regionach `aria-live`. Poziom ryzyka zawsze ma tekst i symbol, a kolor tylko go wspiera.
@@ -85,9 +103,12 @@ src/
   data/crops.ts           lista upraw i miesiące krytyczne
   data/demoScenarios.ts   trzy scenariusze demo (dane ilustracyjne, poza komponentami)
   data/geometry.ts        pomocnicze funkcje geometrii
+  data/account.ts         konto użytkownika, jego działki i powiadomienia (dane fikcyjne)
+  types/account.ts        typy konta, działki zapisanej, powiadomienia i preferencji
+  services/account.ts     podsumowania działek i filtrowanie powiadomień według preferencji
   services/analysis.ts    JEDNO asynchroniczne wejście do analizy: analyzeParcel()
   lib/                    daty (strefa Europe/Warsaw), walidacja formularza, routing (#), etykiety
-  components/             widoki: ekran analizy, raport, mapa (Leaflet + szkic SVG), znacznik ryzyka
+  components/             powłoka aplikacji (menu, pasek górny, nawigacja dolna), zakładki, raport, mapa, ikony
   styles.css              style ekranu i wydruku
 ```
 

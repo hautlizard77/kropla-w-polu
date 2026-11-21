@@ -3,23 +3,53 @@ import type { AnalysisRequest } from '../types/analysis';
 
 /**
  * Prosta nawigacja oparta na fragmencie adresu (#), bez dodatkowej biblioteki.
- * Raport ma własny adres z parametrami, więc działa przycisk „Wstecz”, odświeżenie strony i udostępnienie linku.
+ * Każdy widok ma własny adres, więc działa „Wstecz”, odświeżenie strony i udostępnienie linku.
  */
-export type Route = { name: 'analysis' } | { name: 'report'; request: AnalysisRequest | null };
+export type Route =
+  | { name: 'dashboard' }
+  | { name: 'parcels' }
+  | { name: 'analysis' }
+  | { name: 'report'; request: AnalysisRequest | null }
+  | { name: 'notifications' }
+  | { name: 'account' };
+
+export type RouteName = Route['name'];
+
+export const HASH = {
+  dashboard: '#/',
+  parcels: '#/dzialki',
+  analysis: '#/analiza',
+  notifications: '#/powiadomienia',
+  account: '#/konto',
+} as const;
+
+/** Zgodność wsteczna – dawny adres ekranu analizy. */
+export const ANALYSIS_HASH = HASH.analysis;
 
 export function parseHash(hash: string): Route {
-  const [path, query = ''] = hash.replace(/^#/, '').split('?');
-  if (path === '/raport') {
-    const params = new URLSearchParams(query);
-    const parcelId = params.get('dzialka') ?? '';
-    const cropId = params.get('uprawa') ?? '';
-    const analysisDate = params.get('data') ?? '';
-    if (parcelId && isCropId(cropId) && analysisDate) {
-      return { name: 'report', request: { parcelId, cropId, analysisDate } };
+  const [path = '', query = ''] = hash.replace(/^#/, '').split('?');
+  switch (path) {
+    case '/dzialki':
+      return { name: 'parcels' };
+    case '/analiza':
+      return { name: 'analysis' };
+    case '/powiadomienia':
+      return { name: 'notifications' };
+    case '/konto':
+      return { name: 'account' };
+    case '/raport': {
+      const params = new URLSearchParams(query);
+      const parcelId = params.get('dzialka') ?? '';
+      const cropId = params.get('uprawa') ?? '';
+      const analysisDate = params.get('data') ?? '';
+      if (parcelId && isCropId(cropId) && analysisDate) {
+        return { name: 'report', request: { parcelId, cropId, analysisDate } };
+      }
+      return { name: 'report', request: null };
     }
-    return { name: 'report', request: null };
+    default:
+      return { name: 'dashboard' };
   }
-  return { name: 'analysis' };
 }
 
 export function reportHash(request: AnalysisRequest): string {
@@ -30,8 +60,6 @@ export function reportHash(request: AnalysisRequest): string {
   });
   return `#/raport?${params.toString()}`;
 }
-
-export const ANALYSIS_HASH = '#/';
 
 export function sameRequest(a: AnalysisRequest, b: AnalysisRequest): boolean {
   return a.parcelId === b.parcelId && a.cropId === b.cropId && a.analysisDate === b.analysisDate;

@@ -103,3 +103,26 @@ export function formatDateTimePl(isoDateTime: string): string {
     timeStyle: 'short',
   }).format(date);
 }
+
+const WEEKDAYS = ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota'];
+
+/** „sobota, 21 listopada 2026” dla daty kalendarzowej. */
+export function formatLongDatePl(date: IsoDate): string {
+  const parts = parse(date);
+  if (!parts) return date;
+  const weekday = WEEKDAYS[new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay()] ?? '';
+  return `${weekday}, ${formatDatePl(date)}`;
+}
+
+/** „dziś, 07:42”, „wczoraj, 16:05” albo „12 listopada 2026, 09:00” – w strefie Europe/Warsaw. */
+export function formatRelativeDateTimePl(isoDateTime: string, now: Date = new Date()): string {
+  const date = new Date(isoDateTime);
+  if (Number.isNaN(date.getTime())) return isoDateTime;
+  const day = todayInPoland(date);
+  const today = todayInPoland(now);
+  const yesterday = todayInPoland(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+  const time = new Intl.DateTimeFormat('pl-PL', { timeZone: 'Europe/Warsaw', hour: '2-digit', minute: '2-digit' }).format(date);
+  if (day === today) return `dziś, ${time}`;
+  if (day === yesterday) return `wczoraj, ${time}`;
+  return `${formatDatePl(day)}, ${time}`;
+}

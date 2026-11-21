@@ -7,6 +7,8 @@ interface Props {
   highlights?: { label: string; geometry: PolygonGeometry }[];
   title: string;
   className?: string;
+  /** Podpis z legendą pod szkicem (domyślnie widoczny). */
+  showCaption?: boolean;
 }
 
 const SIZE = { width: 320, height: 220, padding: 16 };
@@ -15,7 +17,7 @@ const SIZE = { width: 320, height: 220, padding: 16 };
  * Prosty szkic działki bez podkładu mapowego.
  * Używany jako stan awaryjny mapy i na wydruku raportu (kafelki mapy drukują się zawodnie).
  */
-export function SchematicMap({ parcel, highlights = [], title, className }: Props) {
+export function SchematicMap({ parcel, highlights = [], title, className, showCaption = true }: Props) {
   const patternId = `kreskowanie-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const bounds = boundsOf([parcel.geometry, ...highlights.map((h) => h.geometry)]);
   if (!bounds) return null;
@@ -59,6 +61,7 @@ export function SchematicMap({ parcel, highlights = [], title, className }: Prop
           N↑
         </text>
       </svg>
+      {showCaption && (
       <figcaption>
         <span className="legend legend--parcel">Granica działki</span>
         {highlights.map((highlight) => (
@@ -68,6 +71,7 @@ export function SchematicMap({ parcel, highlights = [], title, className }: Prop
         ))}
         <span className="muted"> · szkic bez podkładu mapy, geometria ilustracyjna</span>
       </figcaption>
+      )}
     </figure>
   );
 }

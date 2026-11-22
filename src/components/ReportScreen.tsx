@@ -1,4 +1,5 @@
 import { Component, Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { ANALYSIS_STEPS, LoadingProgress } from './LoadingProgress';
 import { cropLabel } from '../data/crops';
 import { CropBadge, CropPanel } from './CropPanel';
 import { ReportTabs, TabPanel, type TabDef, type TabId } from './ReportTabs';
@@ -133,7 +134,7 @@ export function ReportScreen({ request, cachedResult, onChangeParcel, onLoaded, 
         </h1>
         {request && <RequestSummary request={request} />}
         <div role={state.kind === 'error' ? 'alert' : 'status'} aria-live="polite">
-          {state.kind === 'loading' && <p className="status status--loading">Analizuję dane dla działki…</p>}
+          {state.kind === 'loading' && <LoadingProgress expectedMs={15000} steps={ANALYSIS_STEPS} label="Analiza działki" />}
           {state.kind === 'invalid' && (
             <p className="status status--info">Adres raportu jest niepełny. Wybierz działkę, uprawę i datę analizy.</p>
           )}
@@ -366,9 +367,7 @@ function Report({
           <LoadBoundary>
             <Suspense
               fallback={
-                <p className="status status--loading" role="status">
-                  Wczytuję moduł „Teren i spływ”…
-                </p>
+                <LoadingProgress expectedMs={1500} steps={[{ from: 0, label: 'Moduł widoku 3D' }]} label="Wczytywanie widoku terenu" />
               }
             >
               <TerrainPanel parcelId={parcel.id} analysisDate={request.analysisDate} />

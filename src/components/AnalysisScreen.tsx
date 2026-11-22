@@ -10,6 +10,7 @@ import type { ParcelSummary } from '../types/account';
 import { PageHeader } from './AppShell';
 import { Steps } from './Layout';
 import { ParcelMap, type MapParcel } from './ParcelMap';
+import { ANALYSIS_STEPS, LoadingProgress } from './LoadingProgress';
 
 interface Props {
   values: FormValues;
@@ -206,9 +207,7 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
 
             <div className="form-status" role="status" aria-live="polite">
               {isLoading && (
-                <p className="status status--loading">
-                  Pobieram dane działki: granicę, pogodę z 10 lat, glebę i cieki w pobliżu. Zwykle trwa to kilka sekund.
-                </p>
+                <LoadingProgress expectedMs={15000} steps={ANALYSIS_STEPS} label="Analiza działki" />
               )}
               {unavailable && (
                 <p className="status status--info">

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { LoadingProgress, TERRAIN_STEPS } from '../LoadingProgress';
 import { formatDatePl, formatDateTimePl } from '../../lib/dates';
 import { fetchNdmi, fetchTerrain } from '../../services/terrain';
 import type { NdmiResult, SourceInfo, TerrainResult } from '../../types/terrain';
@@ -165,16 +166,12 @@ export default function TerrainPanel({ parcelId, analysisDate }: Props) {
       </h2>
 
       {terrain.kind === 'loading' && (
-        <div className="status status--loading" role="status">
-          <p>
-            Pobieram model terenu z GUGiK i liczę spływ – zwykle kilka sekund. Kolejne otwarcia tej działki są natychmiastowe.
-          </p>
-          {waitedS >= 15 && (
-            <p>
-              Trwa to już {waitedS} s – usługa GUGiK odpowiada wolniej niż zwykle albo chwilowo ogranicza liczbę zapytań. Jeśli nie
-              odpowie, aplikacja spróbuje wolniejszego, zapasowego źródła (najwyżej ok. minuty).
-            </p>
-          )}
+        <div role="status">
+          <LoadingProgress
+            expectedMs={8000}
+            steps={waitedS >= 15 ? [{ from: 0, label: 'GUGiK odpowiada wolniej – próbuję zapasowego źródła' }] : TERRAIN_STEPS}
+            label="Analiza terenu"
+          />
         </div>
       )}
 
@@ -399,9 +396,17 @@ function Legend({ terrain, mode, layers }: { terrain: TerrainResult; mode: Surfa
 function NdmiInfo({ state }: { state: Load<NdmiResult> }) {
   if (state.kind === 'loading' || state.kind === 'idle') {
     return (
-      <p className="status status--loading" role="status">
-        Szukam scen Sentinel-2 z daty analizy lub wcześniejszych i maskuję chmury…
-      </p>
+      <div role="status">
+        <LoadingProgress
+          compact
+          expectedMs={8000}
+          steps={[
+            { from: 0, label: 'Sceny Sentinel-2' },
+            { from: 40, label: 'Maska chmur i NDMI' },
+          ]}
+          label="Zdjęcie satelitarne"
+        />
+      </div>
     );
   }
   // Błąd pobierania Sentinel-2 nie przeszkadza w analizie terenu – nie pokazujemy komunikatu.

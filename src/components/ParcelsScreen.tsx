@@ -9,6 +9,7 @@ import { PageHeader } from './AppShell';
 import { Icon } from './Icon';
 import { RiskBadge } from './RiskBadge';
 import { SchematicMap } from './SchematicMap';
+import { LoadingProgress } from './LoadingProgress';
 
 interface Props {
   parcels: ParcelSummary[];
@@ -156,12 +157,14 @@ export function ParcelsScreen({ parcels, lockedIds, onAdd, onRemove, onAnalyze }
                   />
                 ) : (
                   <div className="parcel-card__placeholder">
-                    <Icon name="pin" size={28} />
-                    <span>
-                      {item.lookup === 'pending'
-                        ? 'Pobieram granicę działki z ewidencji (ULDK)…'
-                        : (item.lookupMessage ?? 'Nie znaleziono tej działki w ewidencji (ULDK) – sprawdź identyfikator.')}
-                    </span>
+                    {item.lookup === 'pending' ? (
+                      <LoadingProgress compact expectedMs={4000} steps={[{ from: 0, label: 'Granica z ewidencji' }]} label="Pobieranie granicy działki" />
+                    ) : (
+                      <>
+                        <Icon name="pin" size={28} />
+                        <span>{item.lookupMessage ?? 'Nie znaleziono tej działki w ewidencji (ULDK) – sprawdź identyfikator.'}</span>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

@@ -3,7 +3,7 @@ import { CROP_PARAMS, STAGE_LABELS, cropDay, cropPhases, dayOfYear, droughtSensi
 import { formatDatePl, formatMonthsPl } from '../lib/dates';
 import { reportHash } from '../lib/route';
 import type { AnalysisRequest } from '../types/analysis';
-import { CropOptions } from './CropOptions';
+import { CropPicker } from './CropPicker';
 import { Icon } from './Icon';
 
 const STAGE_SHORT: Record<Exclude<Stage, 'poza_sezonem'>, string> = {
@@ -61,12 +61,10 @@ export function CropPanel({
         <h2 id="twoja-uprawa" tabIndex={-1}>
           <Icon name="leaf" size={22} /> Twoja uprawa: {crop?.label ?? request.cropId}
         </h2>
-        <label className="crop-panel__switch no-print">
-          <span>Sprawdź dla innej uprawy</span>
-          <select value={request.cropId} onChange={(event) => changeCrop(request, event.target.value)}>
-            <CropOptions />
-          </select>
-        </label>
+        <div className="crop-panel__switch no-print">
+          <label htmlFor="inna-uprawa">Sprawdź dla innej uprawy</label>
+          <CropPicker id="inna-uprawa" value={request.cropId} onChange={(cropId) => changeCrop(request, cropId)} placeholder="Wpisz nazwę uprawy" />
+        </div>
       </div>
       {isDemo && (
         <p className="crop-panel__demo no-print">

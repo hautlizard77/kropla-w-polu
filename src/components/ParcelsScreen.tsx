@@ -1,6 +1,6 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { cropLabel, isCropId } from '../data/crops';
-import { CropOptions } from './CropOptions';
+import { CropPicker } from './CropPicker';
 import { formatDatePl, todayInPoland } from '../lib/dates';
 import { reportHash } from '../lib/route';
 import { PARCEL_ID_FORMAT_ERROR, isValidParcelId, normalizeParcelId } from '../lib/validation';
@@ -116,16 +116,13 @@ export function ParcelsScreen({ parcels, lockedIds, onAdd, onRemove, onAnalyze }
               <label htmlFor={ids.cropId}>Uprawa</label>
               <p className="field__hint" id={`${ids.cropId}-pomoc`}>Uprawa w bieżącym sezonie.</p>
               {errors.cropId && <p className="field__error" id={`${ids.cropId}-blad`}>{errors.cropId}</p>}
-              <select
+              <CropPicker
                 id={ids.cropId}
                 value={draft.cropId}
-                onChange={(event) => setDraft({ ...draft, cropId: event.target.value })}
-                aria-invalid={errors.cropId ? true : undefined}
-                aria-describedby={`${errors.cropId ? `${ids.cropId}-blad ` : ''}${ids.cropId}-pomoc`}
-              >
-                <option value="">Wybierz uprawę</option>
-                <CropOptions />
-              </select>
+                onChange={(cropId) => setDraft({ ...draft, cropId })}
+                ariaInvalid={Boolean(errors.cropId)}
+                ariaDescribedBy={`${errors.cropId ? `${ids.cropId}-blad ` : ''}${ids.cropId}-pomoc`}
+              />
             </div>
             <div className="form-actions">
               <button type="submit" className="btn btn--primary">

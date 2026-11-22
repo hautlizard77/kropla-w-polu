@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { cropLabel } from '../data/crops';
-import { CropOptions } from './CropOptions';
+import { CropPicker } from './CropPicker';
 import { DEMO_PARCELS, type DemoScenario } from '../data/demoScenarios';
 import { earliestAnalysisDate, formatDatePl, todayInPoland } from '../lib/dates';
 import { normalizeParcelId, validateForm, type FieldErrors, type FormValues } from '../lib/validation';
@@ -42,7 +42,7 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
   const abortRef = useRef<AbortController | null>(null);
   const fieldRefs = {
     parcelId: useRef<HTMLInputElement>(null),
-    cropId: useRef<HTMLSelectElement>(null),
+    cropId: useRef<HTMLInputElement>(null),
     analysisDate: useRef<HTMLInputElement>(null),
   };
   const ids = { parcelId: useId(), cropId: useId(), analysisDate: useId() };
@@ -164,19 +164,15 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
               </div>
             )}
 
-            <Field id={ids.cropId} label="Uprawa" hint="Uprawa, która jest teraz na polu lub była w wybranym dniu." message={fieldMessage('cropId')}>
-              <select
+            <Field id={ids.cropId} label="Uprawa" hint="Uprawa, która jest teraz na polu lub była w wybranym dniu. Wpisz fragment nazwy albo rozwiń listę." message={fieldMessage('cropId')}>
+              <CropPicker
                 ref={fieldRefs.cropId}
                 id={ids.cropId}
-                name="cropId"
                 value={values.cropId}
-                onChange={(event) => update('cropId', event.target.value)}
-                aria-invalid={fieldMessage('cropId') ? true : undefined}
-                aria-describedby={describedBy(ids.cropId, fieldMessage('cropId'))}
-              >
-                <option value="">Wybierz uprawę</option>
-                <CropOptions />
-              </select>
+                onChange={(cropId) => update('cropId', cropId)}
+                ariaInvalid={Boolean(fieldMessage('cropId'))}
+                ariaDescribedBy={describedBy(ids.cropId, fieldMessage('cropId'))}
+              />
             </Field>
 
             <Field

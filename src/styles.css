@@ -3797,3 +3797,132 @@ details > summary:hover {
     print-color-adjust: exact;
   }
 }
+
+/* Wybór uprawy z wyszukiwaniem (combobox). */
+.crop-picker {
+  position: relative;
+}
+
+.crop-picker__control {
+  position: relative;
+}
+
+.crop-picker input {
+  display: block;
+  width: 100%;
+  min-height: 2.9rem;
+  padding: 0.55rem 2.6rem 0.55rem 0.75rem;
+  font: inherit;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--white);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-small);
+}
+
+.crop-picker input:hover {
+  border-color: var(--navy-800);
+}
+
+.crop-picker__toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.3rem;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--navy-800);
+  cursor: pointer;
+}
+
+.crop-picker__toggle:hover {
+  background: var(--gray-100);
+}
+
+.crop-picker--open .crop-picker__toggle svg {
+  transform: rotate(180deg);
+}
+
+.crop-picker__list {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  max-height: 20rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.3rem 0;
+  list-style: none;
+  background: var(--white);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-small);
+  box-shadow: 0 8px 24px rgba(16, 38, 66, 0.16);
+}
+
+.crop-picker__list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crop-picker__group {
+  padding: 0.45rem 0.8rem 0.2rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.crop-picker__option {
+  padding: 0.45rem 0.8rem 0.45rem 1.2rem;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.crop-picker__option--active {
+  background: var(--blue-50);
+}
+
+.crop-picker__option--selected {
+  font-weight: 700;
+  color: var(--navy-800);
+}
+
+.crop-picker__option--selected::after {
+  content: ' ✓';
+  color: var(--green-600);
+}
+
+.crop-picker__empty {
+  padding: 0.6rem 0.8rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.field--invalid .crop-picker input {
+  border-color: var(--error);
+}
+
+.crop-panel__switch .crop-picker {
+  min-width: 16rem;
+}
+
+.crop-panel__switch .crop-picker input {
+  min-height: 2.4rem;
+  border-width: 1px;
+}
+
+@media (max-width: 576px) {
+  .crop-panel__switch .crop-picker {
+    min-width: 0;
+    width: 100%;
+  }
+}

@@ -44,7 +44,7 @@ globalThis.fetch = (async (input: string | URL | Request) => {
     }
     return new Response(JSON.stringify({ features: [] }), { headers: { 'content-type': 'application/json' } });
   }
-  throw new Error(`tryb offline (${url.host})`);
+  throw new Error('nie odpytywano – odtworzenie z zapisanych danych');
 }) as typeof fetch;
 
 interface Iung {

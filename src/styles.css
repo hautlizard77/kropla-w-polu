@@ -3509,12 +3509,25 @@ details > summary:hover {
     padding: 0;
   }
 
-  .assessment,
-  .recommendation,
+  /* Duże karty (ocena, zalecenie) mogą przechodzić na kolejną stronę – inaczej wydruk ma puste pół strony. */
   .schematic,
   .data-note,
+  .evidence-numbers,
+  .field-task,
+  .satellite-card__compare > div,
   tr {
     break-inside: avoid;
+  }
+
+  /* Odnośniki w tekście (np. „Od uprawy zależą: …”) są przyciskami – na wydruku zostają jako zwykły tekst. */
+  button.link-button {
+    display: inline !important;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: none;
   }
 
   .report-section > h2,

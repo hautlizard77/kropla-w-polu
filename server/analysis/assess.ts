@@ -487,7 +487,9 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
     summaryParts.push(
       seasonRunoff >= 1
         ? `Od 1 marca ok. ${mm(seasonRunoff)} z ${mm(seasonRain)} opadu spłynęło po powierzchni pola (średnie nachylenie ${pl(slopeDeg)}°) – ta woda nie zasiliła gleby.`
-        : `Pole ${slopeDeg < 2 ? 'jest prawie płaskie' : 'jest łagodnie nachylone'} (${pl(slopeDeg)}°) – opady od 1 marca wsiąkały, spływ po powierzchni był pomijalny.`,
+        : slopeDeg < 5
+          ? `Pole jest ${slopeDeg < 2 ? 'prawie płaskie' : 'łagodnie nachylone'} (${pl(slopeDeg)}°) – opady od 1 marca wsiąkały, spływ po powierzchni był pomijalny.`
+          : `Pole jest nachylone (${pl(slopeDeg)}°), ale ${soil.category === 'lekka' ? 'lekka gleba szybko przyjmuje wodę i' : ''} opady od 1 marca nie były na tyle intensywne, żeby spływać – spływ po powierzchni był pomijalny.`.replace('ale  opady', 'ale opady'),
     );
   }
   const contrast = terrain && ndmi ? slopeContrast(terrain, ndmi) : null;

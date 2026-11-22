@@ -150,7 +150,7 @@ test('brak danych o glebie: „Za mało danych”, bez zaleceń, ale ze wskaźni
 test('każda uprawa z listy ma spójne parametry i kalendarz', async () => {
   const { CROPS, CROP_GROUPS } = await import('../../src/data/crops');
   const { CROP_PARAMS, cropPhases } = await import('../../src/data/cropParams');
-  assert.ok(CROPS.length >= 25);
+  assert.ok(CROPS.length >= 60);
   for (const crop of CROPS) {
     const c = CROP_PARAMS[crop.id];
     assert.ok(c, `brak parametrów: ${crop.id}`);

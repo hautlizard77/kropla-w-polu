@@ -28,7 +28,7 @@ const CN_TABLE: Record<'row' | 'grain' | 'meadow', Record<Hsg, number>> = {
 export function cropCover(cropId: CropId): 'row' | 'grain' | 'meadow' {
   if (cropId === 'uzytki_zielone' || cropId === 'lucerna' || cropId === 'koniczyna') return 'meadow';
   const group = CROPS.find((c) => c.id === cropId)?.group;
-  if (group === 'okopowe' || group === 'warzywa' || group === 'owoce' || cropId.startsWith('kukurydza') || cropId === 'slonecznik' || cropId === 'soja') return 'row';
+  if (group === 'okopowe' || group === 'warzywa' || group === 'owoce' || group === 'przemyslowe' || cropId.startsWith('kukurydza') || cropId === 'slonecznik' || cropId === 'soja' || cropId === 'sorgo' || cropId === 'fasola') return 'row';
   return 'grain';
 }
 

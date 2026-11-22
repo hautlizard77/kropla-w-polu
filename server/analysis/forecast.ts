@@ -30,7 +30,7 @@ const MAX_DOSE_MM = 30;
 const MIN_INTERVAL_DAYS = 3;
 const MONTHS_NOM = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'];
 const WEEKDAYS = ['niedz.', 'pon.', 'wt.', 'śr.', 'czw.', 'pt.', 'sob.'];
-const IRRIGATED_GROUPS = new Set(['warzywa', 'okopowe', 'owoce']);
+const IRRIGATED_GROUPS = new Set(['warzywa', 'okopowe', 'owoce', 'przemyslowe']);
 
 /** Krótka data: „pt. 27.11”. */
 export function shortDate(iso: string): string {

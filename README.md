@@ -115,8 +115,10 @@ wyszukanie. Sprawdzona granica (punkty w zasięgu EPSG:2180, dodatnia powierzchn
 sprawdzamy ją ponownie, a gdy ULDK jest wtedy niedostępne – używamy wersji z bufora z adnotacją w źródłach. Bez bufora
 rolnik dostaje komunikat o niedostępności ewidencji bez kodów technicznych (szczegóły w logu serwera).
 
-**Uprawy:** 27 upraw w 7 grupach (zboża, okopowe, oleiste, strączkowe, pastewne i użytki zielone, warzywa, owoce i sady),
-parametry w `src/data/cropParams.ts`. Raport ma sekcję „Twoja uprawa”: faza na dzień analizy, zapotrzebowanie na wodę,
+**Uprawy:** 61 upraw w 8 grupach (zboża, okopowe, oleiste, strączkowe, pastewne i użytki zielone, przemysłowe i specjalne
+– m.in. chmiel i tytoń, jak w Monitoringu Suszy IUNG – warzywa polowe, owoce i sady), parametry w `src/data/cropParams.ts`:
+Kc i głębokość korzeni z FAO-56 (tab. 12 i 22); uprawy spoza tabel FAO (np. gorczyca, tytoń, konopie, pietruszka, por,
+borówka, aronia) mają parametry przybliżone z upraw o podobnym rozwoju i taką adnotację w raporcie. Raport ma sekcję „Twoja uprawa”: faza na dzień analizy, zapotrzebowanie na wodę,
 głębokość korzeni, wrażliwość na suszę, kalendarz sezonu z miesiącami niedoborów i przełącznik do porównania z inną uprawą.
 Wyniki zależne od uprawy mają oznaczenie „Zależy od uprawy”.
 

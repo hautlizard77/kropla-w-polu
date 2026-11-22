@@ -49,9 +49,43 @@ export type CropId =
   | 'cebula'
   | 'kapusta'
   | 'truskawki'
-  | 'sad_jablon';
+  | 'sad_jablon'
+  | 'pszenzyto_jare'
+  | 'proso'
+  | 'sorgo'
+  | 'ziemniaki_wczesne'
+  | 'buraki_pastewne'
+  | 'len'
+  | 'gorczyca'
+  | 'fasola'
+  | 'chmiel'
+  | 'tyton'
+  | 'konopie'
+  | 'pomidor'
+  | 'ogorek'
+  | 'kalafior'
+  | 'brokul'
+  | 'salata'
+  | 'szpinak'
+  | 'burak_cwiklowy'
+  | 'pietruszka'
+  | 'seler'
+  | 'por'
+  | 'czosnek'
+  | 'fasola_szparagowa'
+  | 'groszek_zielony'
+  | 'dynia'
+  | 'kukurydza_cukrowa'
+  | 'sad_grusza'
+  | 'sad_wisnia'
+  | 'sad_sliwa'
+  | 'porzeczka'
+  | 'malina'
+  | 'borowka'
+  | 'aronia'
+  | 'winorosl';
 
-export type CropGroup = 'zboza' | 'okopowe' | 'oleiste' | 'straczkowe' | 'pastewne' | 'warzywa' | 'owoce';
+export type CropGroup = 'zboza' | 'okopowe' | 'oleiste' | 'straczkowe' | 'pastewne' | 'przemyslowe' | 'warzywa' | 'owoce';
 
 export interface Crop {
   id: CropId;

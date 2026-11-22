@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { cropLabel } from '../data/crops';
 import { CropPicker } from './CropPicker';
-import { DEMO_PARCELS, type DemoScenario } from '../data/demoScenarios';
+import { DEMO_PARCELS } from '../data/demoScenarios';
 import { earliestAnalysisDate, formatDatePl, todayInPoland } from '../lib/dates';
 import { normalizeParcelId, validateForm, type FieldErrors, type FormValues } from '../lib/validation';
 import { AnalysisError, analyzeParcel } from '../services/analysis';
@@ -11,6 +11,12 @@ import { PageHeader } from './AppShell';
 import { Steps } from './Layout';
 import { ParcelMap, type MapParcel } from './ParcelMap';
 import { ANALYSIS_STEPS, LoadingProgress } from './LoadingProgress';
+
+const JURY_EXAMPLE: FormValues = {
+  parcelId: '142504_2.0018.127',
+  cropId: 'pszenica_ozima',
+  analysisDate: '2019-06-25',
+};
 
 interface Props {
   values: FormValues;
@@ -97,10 +103,10 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
     void run(validation.request);
   }
 
-  function applyScenarioInputs(scenario: DemoScenario) {
+  function applyInputs(inputs: FormValues) {
     setErrors({});
     setStatus({ kind: 'idle' });
-    onValuesChange({ ...scenario.request });
+    onValuesChange({ ...inputs });
   }
 
   function selectOnMap(parcelId: string) {
@@ -132,7 +138,7 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
             <Field
               id={ids.parcelId}
               label="Identyfikator działki ewidencyjnej"
-              hint="Np. 040706_4.0001.9 – znajdziesz go w wypisie z ewidencji gruntów albo na Geoportalu."
+              hint="Identyfikator znajdziesz w wypisie z ewidencji gruntów albo na Geoportalu."
               message={fieldMessage('parcelId')}
             >
               <input
@@ -143,7 +149,7 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
                 inputMode="text"
                 autoComplete="off"
                 spellCheck={false}
-                placeholder="np. 040705_5.0012.245/3"
+                placeholder={`np. ${JURY_EXAMPLE.parcelId}`}
                 value={values.parcelId}
                 onChange={(event) => update('parcelId', event.target.value)}
                 aria-invalid={fieldMessage('parcelId') ? true : undefined}
@@ -158,7 +164,7 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
                   <strong>{cropLabel(selectedDemo.request.cropId)}</strong> i dnia{' '}
                   <strong>{formatDatePl(selectedDemo.request.analysisDate)}</strong>.
                 </p>
-                <button type="button" className="btn btn--small btn--secondary" onClick={() => applyScenarioInputs(selectedDemo)}>
+                <button type="button" className="btn btn--small btn--secondary" onClick={() => applyInputs(selectedDemo.request)}>
                   Ustaw te dane
                 </button>
               </div>
@@ -198,6 +204,14 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
             <div className="form-actions">
               <button type="submit" className="btn btn--primary" disabled={isLoading}>
                 {isLoading ? 'Sprawdzam…' : 'Sprawdź sytuację wodną'}
+              </button>
+              <button
+                type="button"
+                className="btn btn--secondary"
+                disabled={isLoading}
+                onClick={() => applyInputs(JURY_EXAMPLE)}
+              >
+                Wczytaj działkę z raportu jury
               </button>
             </div>
 

@@ -25,7 +25,7 @@ import { CROP_PARAMS, STAGE_LABELS, cropDay, type Stage } from '../../src/data/c
 import { readilyAvailableWater, totalAvailableWater } from './waterBalance';
 import { DEFAULT_SLOPE_DEG, curveNumber, fmt, readNdmi, runoffMm, slopeContrast } from './observations';
 
-export const ASSESS_VERSION = 3;
+export const ASSESS_VERSION = 4;
 const STRESS_DAYS_FOR_DEFICIT_SEASON = 15;
 const MAX_DATA_LAG_DAYS = 7;
 
@@ -130,6 +130,10 @@ function normalWindow(weather: WeatherSeries, end: string, days: number, years: 
     if (v !== null) values.push(v);
   }
   return values.length >= Math.ceil(years / 2) ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null;
+}
+
+function riskWord(level: RiskLevel): string {
+  return level === 'low' ? 'niskie' : level === 'moderate' ? 'umiarkowane' : level === 'elevated' ? 'podwyższone' : 'nieokreślone';
 }
 
 function sumRain(weather: WeatherSeries, from: string, to: string): number {
@@ -247,15 +251,20 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
   const reading = readNdmi(ndmi, request.cropId, request.analysisDate, input.ndmiError ?? null);
   const satellite: SatelliteSummary = {
     status: reading.signal !== 'na' ? 'ok' : reading.median !== null ? 'no_comparison' : 'unavailable',
+    reason: reading.reason,
     sceneDate: reading.sceneDate,
-    coveragePct: ndmi?.scene ? Math.round(ndmi.scene.usefulCoveragePct) : null,
+    coveragePct: reading.coveragePct,
     ndmiMedian: reading.median,
     cropName: cropLabel(request.cropId),
     stageLabel: STAGE_LABELS[reading.stage],
     expected: reading.okFrom !== null && reading.stressBelow !== null ? { okFrom: reading.okFrom, stressBelow: reading.stressBelow } : null,
     verdict: reading.signal === 'na' ? null : reading.signal,
-    text: reading.text,
-    agreement: null,
+    photoText: reading.text,
+    balanceLevel: null,
+    balanceText: null,
+    comparison: null,
+    comparisonText: null,
+    fieldCheck: null,
     sourceId: 's2',
   };
 
@@ -414,16 +423,16 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
     };
   }
   const modelLevel = classify(today.dr, today.taw, today.raw);
-  // Satelita jako drugi, niezależny sygnał: przy wyraźnej rozbieżności korygujemy ocenę o jeden stopień w stronę obserwacji.
+  // Klasę ryzyka wyznacza wyłącznie bilans wody. NDMI jest osobnym sygnałem: potwierdza wynik albo wskazuje
+  // rozbieżność do sprawdzenia w terenie – progi NDMI są orientacyjne i nie mogą przestawiać klasy.
+  const level = modelLevel;
   const order = ['low', 'moderate', 'elevated'] as const;
-  const modelScore = order.indexOf(modelLevel);
   const satScore = reading.signal === 'ok' ? 0 : reading.signal === 'watch' ? 1 : reading.signal === 'stress' ? 2 : null;
-  const satGap = today.inSeason && satScore !== null ? satScore - modelScore : null;
-  const level: Exclude<RiskLevel, 'insufficient_data'> = satGap !== null && Math.abs(satGap) >= 2 ? order[modelScore + Math.sign(satGap)]! : modelLevel;
+  const satGap = today.inSeason && satScore !== null ? satScore - order.indexOf(modelLevel) : null;
   const lowLast = lowRun[lowRun.length - 1];
   const highLast = highRun[highRun.length - 1];
   const levels = new Set([level, lowLast ? classify(lowLast.dr, lowLast.taw, lowLast.raw) : level, highLast ? classify(highLast.dr, highLast.taw, highLast.raw) : level]);
-  const uncertain = levels.size > 1 || (satGap !== null && Math.abs(satGap) >= 2);
+  const uncertain = levels.size > 1;
   const reservePct = Math.round((100 * (today.taw - today.dr)) / Math.max(1, today.taw));
 
   const headline = !today.inSeason
@@ -441,24 +450,36 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
       ? `Ubytek (${mm(today.dr)}) przekracza próg łatwo dostępnej wody (${mm(today.raw)}) – rośliny mogą ograniczać wzrost.`
       : `Ubytek (${mm(today.dr)}) nie przekracza progu łatwo dostępnej wody (${mm(today.raw)}).`,
   ];
-  if (reading.signal !== 'na' && satGap !== null) {
-    satellite.agreement =
+  const reservePctText = `${reservePct}%`;
+  satellite.balanceLevel = modelLevel;
+  satellite.balanceText =
+    modelLevel === 'low'
+      ? `W glebie zostało ${reservePctText} zapasu wody dostępnej dla roślin – według bilansu rośliny nie powinny cierpieć z braku wody.`
+      : modelLevel === 'moderate'
+        ? `Zapas wody w glebie spadł do ${reservePctText} – według bilansu rośliny zaczynają ograniczać wzrost.`
+        : `Zapas wody w glebie spadł do ${reservePctText} – według bilansu rośliny są w wyraźnym stresie wodnym.`;
+  if (satGap !== null) {
+    const diverge = Math.abs(satGap) >= 2;
+    satellite.comparison = satGap === 0 ? 'agree' : diverge ? 'diverge' : 'partial';
+    satellite.comparisonText =
       satGap === 0
-        ? 'Obserwacja potwierdza wynik bilansu wody.'
-        : Math.abs(satGap) === 1
-          ? 'Obserwacja tylko częściowo zgadza się z bilansem wody.'
-          : 'Obserwacja nie zgadza się z bilansem – ocenę przesunięto o jeden stopień w jej stronę; sprawdź rośliny w terenie.';
+        ? 'Zdjęcie potwierdza wynik bilansu wody.'
+        : diverge
+          ? `Zdjęcie z ${formatDate(reading.sceneDate ?? evalDate)} pokazuje co innego niż bilans wody. Sprawdź stan roślin na polu.`
+          : 'Zdjęcie różni się od bilansu o jeden stopień – to mieści się w dokładności obu metod.';
+    if (diverge) {
+      satellite.fieldCheck =
+        satGap < 0
+          ? 'Sprawdź stan roślin na polu: weź garść gleby z głębokości 10–30 cm (czy klei się i trzyma kształt) i zobacz, czy liście nie zwijają się w południe. Jeśli gleba jest wilgotna, a rośliny jędrne – wody jest więcej, niż wynika z mapy gleb (np. głębsze korzenie, wody gruntowe); wtedy bilans zawyża ryzyko.'
+          : 'Sprawdź stan roślin na polu: czy liście więdną lub żółkną, czy nie ma chorób, szkodników albo śladów gradu i czy uprawa nie zaczęła dojrzewać. Słabe NDMI przy dobrym bilansie może mieć inną przyczynę niż brak wody – albo gleba trzyma mniej wody, niż podaje mapa.';
+    }
     summaryParts.push(
-      `Satelita: ${reading.text} ${
-        satGap === 0
-          ? 'Obserwacja potwierdza wynik bilansu.'
-          : Math.abs(satGap) === 1
-            ? 'Obserwacja tylko częściowo zgadza się z bilansem.'
-            : `Obserwacja nie zgadza się z bilansem (bilans: ${modelLevel === 'low' ? 'niskie' : modelLevel === 'moderate' ? 'umiarkowane' : 'podwyższone'} ryzyko) – ocenę przesunięto o jeden stopień w stronę obserwacji.`
-      }`,
+      diverge
+        ? `Uwaga – rozbieżność: bilans wskazuje ${riskWord(modelLevel)} ryzyko, a zdjęcie satelitarne z ${formatDate(reading.sceneDate ?? evalDate)} – ${reading.signal === 'ok' ? 'dobrze uwodnione rośliny' : 'wyraźny niedobór wody w roślinach'} (NDMI ${fmt(reading.median ?? 0)}). Sprawdź stan roślin na polu.`
+        : `Satelita (NDMI ${fmt(reading.median ?? 0)}, ${formatDate(reading.sceneDate ?? evalDate)}): ${satGap === 0 ? 'potwierdza wynik bilansu' : 'różni się o jeden stopień – w granicach dokładności'}.`,
     );
-  } else if (reading.median !== null) {
-    summaryParts.push(`Satelita: ${reading.text}`);
+  } else if (reading.reason) {
+    satellite.comparisonText = `Brak podstaw do porównania: ${reading.text}`;
   }
   const seasonRain = sumRain(weather, from, evalDate);
   const seasonRunoff = mainRun.reduce((sum, d) => sum + d.ro, 0);
@@ -600,7 +621,7 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
       action: 'Unikaj zabiegów, które przesuszają glebę (głęboka uprawa, zbędne przejazdy); jeśli to możliwe, zostaw glebę przykrytą resztkami lub mulczem.',
       rationale: `Na ${formatDate(evalDate)} ubytek wody w strefie korzeni wynosi ${mm(today.dr)} przy progu ${mm(today.raw)}; ${
         weatherIndicators[1]?.value !== null && weatherIndicators[1]?.value !== undefined ? `bilans wodny z 60 dni: ${weatherIndicators[1].value} mm.` : ''
-      }${reading.signal !== 'na' ? ` Satelita: ${reading.text}` : ''}`,
+      }${reading.signal !== 'na' ? ` ${reading.text}` : ''}`,
       evidenceSourceIds: ['pogoda0', 'gleba', ...(reading.signal !== 'na' ? ['s2'] : [])],
       fieldChecks: ['Wilgotność gleby na głębokości 10–30 cm (próba „w ręku”).', 'Objawy stresu na roślinach: zwijanie liści w południe, żółknięcie dolnych liści.'],
       suggestedArea: null,

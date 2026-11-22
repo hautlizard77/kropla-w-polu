@@ -1,0 +1,229 @@
+{
+ "_opis": "Odpowiedzi GetFeatureInfo MPHP10 (wody.isok.gov.pl, warstwa 19) dla pierścieni 50/100/300 m wokół prostokąta działki; pobrane 2026-11-22. Kolumny: nazwa, charakter, typ, szerokość, identyfikator cieku.",
+ "142504_2.0017.120": [
+  [
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "poniżej 1,5 m",
+    "25272"
+   ],
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "poniżej 1,5 m",
+    "25272"
+   ],
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "od 1,5 m do 5 m",
+    "25272"
+   ]
+  ],
+  [
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "poniżej 1,5 m",
+    "25272"
+   ],
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "poniżej 1,5 m",
+    "25272"
+   ],
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "od 1,5 m do 5 m",
+    "25272"
+   ]
+  ],
+  [
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "poniżej 1,5 m",
+    "25272"
+   ],
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "poniżej 1,5 m",
+    "25272"
+   ],
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "od 1,5 m do 5 m",
+    "25272"
+   ]
+  ]
+ ],
+ "142504_2.0018.127": [
+  [
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "poniżej 1,5 m",
+    "25272"
+   ]
+  ],
+  [
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "poniżej 1,5 m",
+    "25272"
+   ]
+  ],
+  [
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "poniżej 1,5 m",
+    "25272"
+   ],
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "poniżej 1,5 m",
+    "25272"
+   ],
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "od 1,5 m do 5 m",
+    "25272"
+   ]
+  ]
+ ],
+ "142504_2.0018.65/1": [
+  [
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "poniżej 1,5 m",
+    "25272"
+   ]
+  ],
+  [
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "poniżej 1,5 m",
+    "25272"
+   ]
+  ],
+  [
+   [
+    "Jastrzębianka",
+    "ciek naturalny",
+    "stały",
+    "poniżej 1,5 m",
+    "25272"
+   ],
+   [
+    "Jastrzębianka",
+    "ciek naturalny - struga",
+    "stały",
+    "poniżej 1,5 m",
+    "25272"
+   ]
+  ]
+ ],
+ "142508_2.0005.34": [
+  [],
+  [
+   [
+    "Dopływ spod Adolfina",
+    "ciek naturalny",
+    "stały",
+    "poniżej 1,5 m",
+    "252812"
+   ],
+   [
+    "Leniwka",
+    "ciek naturalny - rzeka",
+    "stały",
+    "poniżej 1,5 m",
+    "2528"
+   ],
+   [
+    "Leniwka",
+    "ciek naturalny - rzeka",
+    "stały",
+    "od 1,5 m do 5 m",
+    "2528"
+   ]
+  ],
+  [
+   [
+    "Leniwka",
+    "ciek naturalny - rzeka",
+    "stały",
+    "poniżej 1,5 m",
+    "2528"
+   ]
+  ]
+ ],
+ "142508_2.0010.39/2": [
+  [],
+  [],
+  [
+   [
+    "Dopływ spod Karpówki",
+    "ciek naturalny",
+    "stały",
+    "poniżej 1,5 m",
+    "25282"
+   ],
+   [
+    "Dopływ spod Adolfina",
+    "ciek naturalny",
+    "stały",
+    "poniżej 1,5 m",
+    "252812"
+   ],
+   [
+    "Ostrownica",
+    "ciek naturalny - struga",
+    "stały",
+    "od 1,5 m do 5 m",
+    "25284"
+   ],
+   [
+    "Leniwka",
+    "ciek naturalny - rzeka",
+    "stały",
+    "poniżej 1,5 m",
+    "2528"
+   ],
+   [
+    "Leniwka",
+    "ciek naturalny - rzeka",
+    "stały",
+    "od 1,5 m do 5 m",
+    "2528"
+   ]
+  ]
+ ]
+}

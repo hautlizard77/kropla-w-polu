@@ -3725,3 +3725,40 @@ details > summary:hover {
   border-left: 3px solid var(--green-600);
   background: var(--green-50);
 }
+
+.satellite-card--diverge {
+  border-left-color: var(--risk-moderate);
+  background: #fffdf6;
+}
+
+.satellite-card__alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0 0 0.8rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius-small);
+  background: var(--risk-moderate-bg);
+  color: var(--risk-moderate);
+}
+
+.satellite-card__alert svg {
+  flex: none;
+  margin-top: 0.15rem;
+}
+
+.satellite-card__compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.8rem 1.2rem;
+  margin-bottom: 0.6rem;
+}
+
+.satellite-card__compare h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.satellite-card__compare p {
+  margin: 0.3rem 0;
+}

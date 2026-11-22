@@ -25,6 +25,7 @@ const ndmiOf = (median: number, date: string, deviating = 2): NdmiResult =>
     stats: { median, p10: median - 0.05, p90: median + 0.05, validPixels: 100, parcelPixels: 100, deviatingPixelsPct: deviating },
     values: [],
     deviationMask: [],
+    checkedScenes: [],
     message: 'NDMI z Sentinel-2',
     sources: [{ name: 'Sentinel-2 L2A', provider: 'Copernicus / Earth Search', url: null, origin: 'observed', retrievedAt: null, observationDate: date, resolutionM: 20, durationMs: null, notes: [] }],
   }) as unknown as NdmiResult;
@@ -110,6 +111,9 @@ const terrainOf = (slopeDeg: number): TerrainResult =>
     sources: [{ name: 'NMT', provider: 'GUGiK', url: null, origin: 'observed', retrievedAt: null, observationDate: null, resolutionM: 1, durationMs: null, notes: [] }, { name: 'NMT 1 m', provider: 'GUGiK', url: null, origin: 'observed', retrievedAt: null, observationDate: null, resolutionM: 1, durationMs: null, notes: [] }],
   }) as unknown as TerrainResult;
 
+const dryYears = (d: string): [number, number] => (d.slice(5, 7) >= '05' && d.slice(5, 7) <= '08' ? [0.5, 5] : [3, 1]);
+const dryReq = { parcelId: parcel.id, cropId: 'pszenica_ozima' as const, analysisDate: '2024-06-20' };
+
 // Lata suche z ulewami co 10 dni (25 mm) – na stoku część wody spływa.
 const stormy = (d: string): [number, number] => {
   const summer = d.slice(5, 7) >= '05' && d.slice(5, 7) <= '08';
@@ -134,19 +138,55 @@ test('teren w diagnozie: stok zwiększa spływ i ubytek wody; zalecenia ze wskaz
   assert.equal(steep.dataSources.find((s) => s.id === 'nmt')?.availability, 'available');
 });
 
-test('satelita w diagnozie: zielone, dobrze uwodnione rośliny łagodzą ocenę z bilansu o jeden stopień i to jest napisane', () => {
-  const dry = (d: string): [number, number] => (d.slice(5, 7) >= '05' && d.slice(5, 7) <= '08' ? [0.5, 5] : [3, 1]);
-  const weather = weatherOf('2014-03-01', '2024-06-20', dry);
-  const req = { parcelId: parcel.id, cropId: 'pszenica_ozima' as const, analysisDate: '2024-06-20' };
-  const model = buildAssessment({ request: req, parcel, weather, soil, hydro: null });
+test('zgodność: bilans i NDMI wskazują niedobór – klasa z bilansu, zdjęcie potwierdza', () => {
+  const weather = weatherOf('2014-03-01', '2024-06-20', dryYears);
+  const r = buildAssessment({ request: dryReq, parcel, weather, soil, hydro: null, ndmi: ndmiOf(-0.05, '2024-06-18') });
+  assert.equal(r.currentState.level, 'elevated');
+  assert.equal(r.satellite?.comparison, 'agree');
+  assert.match(r.satellite?.comparisonText ?? '', /potwierdza/);
+  assert.equal(r.satellite?.fieldCheck, null);
+  assert.equal(r.currentState.indicators.find((i) => i.id === 'ndmi')?.isIndirect, true);
+});
+
+test('rozbieżność: bilans – podwyższone ryzyko, zdjęcie – dobrze uwodnione rośliny; klasa się NIE zmienia, są oba wyniki, data sceny i „Sprawdź stan roślin na polu”', () => {
+  const weather = weatherOf('2014-03-01', '2024-06-20', dryYears);
+  const model = buildAssessment({ request: dryReq, parcel, weather, soil, hydro: null });
+  const r = buildAssessment({ request: dryReq, parcel, weather, soil, hydro: null, ndmi: ndmiOf(0.32, '2024-06-18') });
   assert.equal(model.currentState.level, 'elevated');
-  const withSat = buildAssessment({ request: req, parcel, weather, soil, hydro: null, ndmi: ndmiOf(0.32, '2024-06-18') });
-  assert.equal(withSat.currentState.level, 'moderate');
-  assert.match(withSat.currentState.summary, /nie zgadza się z bilansem/);
-  assert.equal(withSat.currentState.indicators.find((i) => i.id === 'ndmi')?.isIndirect, true);
-  const confirmed = buildAssessment({ request: req, parcel, weather, soil, hydro: null, ndmi: ndmiOf(-0.05, '2024-06-18') });
-  assert.equal(confirmed.currentState.level, 'elevated');
-  assert.match(confirmed.currentState.summary, /potwierdza/);
+  assert.equal(r.currentState.level, 'elevated', 'NDMI nie przestawia klasy ryzyka');
+  assert.equal(r.satellite?.comparison, 'diverge');
+  assert.equal(r.satellite?.balanceLevel, 'elevated');
+  assert.equal(r.satellite?.verdict, 'ok');
+  assert.equal(r.satellite?.sceneDate, '2024-06-18');
+  assert.match(r.satellite?.comparisonText ?? '', /18 czerwca 2024.*Sprawdź stan roślin na polu/);
+  assert.match(r.satellite?.fieldCheck ?? '', /^Sprawdź stan roślin na polu/);
+  assert.match(r.currentState.summary, /rozbieżność.*podwyższone.*18 czerwca 2024.*Sprawdź stan roślin na polu/);
+  assert.deepEqual(
+    r.recommendations.map((x) => x.id),
+    model.recommendations.map((x) => x.id),
+    'zalecenia wynikają z bilansu – zdjęcie ich nie zmienia',
+  );
+});
+
+test('brak użytecznej sceny: chmury (pokrycie < 60%), stara scena, brak zdjęć – konkretny powód, bez wpływu na klasę', () => {
+  const weather = weatherOf('2014-03-01', '2024-06-20', dryYears);
+  const cloudy = { ...ndmiOf(0, '2024-06-18'), scene: null, stats: null, checkedScenes: [{ id: 'a', datetime: '2024-06-18T10:00:00Z', date: '2024-06-18', cloudCoverPct: 80, usefulCoveragePct: 34.6 }] } as unknown as NdmiResult;
+  const r1 = buildAssessment({ request: dryReq, parcel, weather, soil, hydro: null, ndmi: cloudy });
+  assert.equal(r1.satellite?.status, 'unavailable');
+  assert.equal(r1.satellite?.reason, 'low_coverage');
+  assert.equal(r1.satellite?.coveragePct, 35);
+  assert.match(r1.satellite?.photoText ?? '', /najwyżej w 35%.*co najmniej 60%/);
+  const r2 = buildAssessment({ request: dryReq, parcel, weather, soil, hydro: null, ndmi: ndmiOf(0.3, '2024-05-25') });
+  assert.equal(r2.satellite?.reason, 'stale');
+  assert.match(r2.satellite?.photoText ?? '', /sprzed 26 dni/);
+  const none = { ...ndmiOf(0, '2024-06-18'), scene: null, stats: null, checkedScenes: [] } as unknown as NdmiResult;
+  const r3 = buildAssessment({ request: dryReq, parcel, weather, soil, hydro: null, ndmi: none });
+  assert.equal(r3.satellite?.reason, 'no_scene');
+  for (const r of [r1, r2, r3]) {
+    assert.equal(r.currentState.level, 'elevated');
+    assert.equal(r.satellite?.comparison, null);
+    assert.match(r.satellite?.comparisonText ?? '', /^Brak podstaw do porównania/);
+  }
 });
 
 test('Sentinel-2 w głównej zakładce: data sceny, pokrycie, interpretacja dla uprawy i fazy; bez porównania – status no_comparison', () => {
@@ -159,7 +199,7 @@ test('Sentinel-2 w głównej zakładce: data sceny, pokrycie, interpretacja dla 
   assert.equal(r.satellite?.coveragePct, 95);
   assert.equal(r.satellite?.verdict, 'stress');
   assert.match(r.satellite?.stageLabel ?? '', /pełnego rozwoju/);
-  assert.match(r.satellite?.agreement ?? '', /potwierdza/);
+  assert.equal(r.satellite?.comparison, 'agree');
   // Kukurydza w fazie początkowej – NDMI opisuje glebę: brak podstaw do porównania.
   const early = buildAssessment({ request: { ...req, cropId: 'kukurydza_ziarno', analysisDate: '2024-05-10' }, parcel, weather, soil, hydro: null, ndmi: ndmiOf(-0.05, '2024-05-08') });
   assert.equal(early.satellite?.status, 'no_comparison');

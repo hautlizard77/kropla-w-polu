@@ -61,27 +61,37 @@ export const DEFAULT_SLOPE_DEG = 2;
 
 export type SatSignal = 'ok' | 'watch' | 'stress' | 'na';
 
+/** Dlaczego NDMI nie daje się porównać z oczekiwaniem dla uprawy. */
+export type NoComparisonReason = 'unavailable' | 'no_scene' | 'low_coverage' | 'stale' | 'phase';
+
 export interface NdmiReading {
   signal: SatSignal;
+  /** Powód braku porównania (gdy signal = 'na'). */
+  reason: NoComparisonReason | null;
   median: number | null;
   sceneDate: string | null;
   ageDays: number | null;
+  coveragePct: number | null;
   /** Próg „dobrego uwodnienia” dla fazy, jeśli faza pozwala interpretować NDMI. */
   okFrom: number | null;
   stressBelow: number | null;
   stage: Stage;
-  /** Zdanie dla rolnika. */
+  /** Zdanie dla rolnika: co widać na zdjęciu albo konkretny powód braku porównania. */
   text: string;
   deviatingPct: number | null;
 }
 
 /** Ile dni może mieć zdjęcie, żeby opisywało „stan teraz”. */
 export const MAX_SCENE_AGE_DAYS = 10;
+/** Najmniejsza widoczna część działki, przy której zdjęcie jest użyte (jak w server/sources/sentinel.ts). */
+export const MIN_SCENE_COVERAGE_PCT = 60;
 
 /**
  * Progi NDMI dla łanu, który zakrywa glebę: powyżej ok. 0,2 rośliny są dobrze uwodnione, poniżej ok. 0 – wyraźnie
  * brakuje im wody. W fazie rozwoju łan jest rzadszy, więc progi są niższe. W fazie początkowej, dojrzewania i poza
  * sezonem NDMI opisuje głównie glebę lub zasychające rośliny – nie wnioskujemy z niego o stresie.
+ * Progi są orientacyjne (literatura dla zbóż i kukurydzy) – dlatego NDMI nie zmienia klasy ryzyka, tylko ją potwierdza
+ * albo wskazuje rozbieżność do sprawdzenia w terenie.
  */
 export function ndmiThresholds(stage: Stage): { okFrom: number; stressBelow: number } | null {
   if (stage === 'srodkowa') return { okFrom: 0.2, stressBelow: 0.05 };
@@ -91,21 +101,38 @@ export function ndmiThresholds(stage: Stage): { okFrom: number; stressBelow: num
 
 export function readNdmi(ndmi: NdmiResult | null, cropId: CropId, evalDate: string, failure: string | null): NdmiReading {
   const stage = cropDay(cropId, evalDate).stage;
-  const base = { stage, okFrom: null, stressBelow: null, deviatingPct: null };
-  if (!ndmi) return { ...base, signal: 'na', median: null, sceneDate: null, ageDays: null, text: failure ?? 'Zdjęcie satelitarne niedostępne.' };
+  const empty = { stage, okFrom: null, stressBelow: null, deviatingPct: null, median: null, sceneDate: null, ageDays: null, coveragePct: null, signal: 'na' as const };
+  if (!ndmi) {
+    return { ...empty, reason: 'unavailable', text: failure ?? 'Zdjęcie satelitarne nie zostało pobrane (usługa Sentinel-2 nie odpowiedziała).' };
+  }
   if (!ndmi.scene || !ndmi.stats) {
-    return { ...base, signal: 'na', median: null, sceneDate: null, ageDays: null, text: `W ostatnich 45 dniach przed datą analizy nie było zdjęcia Sentinel-2 z odkrytą działką (chmury).` };
+    const best = ndmi.checkedScenes.reduce((m, sc) => Math.max(m, sc.usefulCoveragePct), 0);
+    if (ndmi.checkedScenes.length > 0) {
+      return {
+        ...empty,
+        reason: 'low_coverage',
+        coveragePct: Math.round(best),
+        text: `Na ${ndmi.checkedScenes.length} ${ndmi.checkedScenes.length === 1 ? 'zdjęciu' : 'zdjęciach'} z ostatnich 45 dni działka była widoczna najwyżej w ${Math.round(best)}% (potrzeba co najmniej ${MIN_SCENE_COVERAGE_PCT}%) – zasłaniały ją chmury lub ich cienie.`,
+      };
+    }
+    return { ...empty, reason: 'no_scene', text: 'W ostatnich 45 dniach przed datą analizy nie ma zdjęcia Sentinel-2 obejmującego działkę.' };
   }
   const median = Math.round(ndmi.stats.median * 100) / 100;
   const ageDays = Math.round((Date.parse(evalDate) - Date.parse(ndmi.scene.date)) / 86400000);
-  const deviatingPct = ndmi.stats.deviatingPixelsPct;
+  const reading = {
+    ...empty,
+    median,
+    sceneDate: ndmi.scene.date,
+    ageDays,
+    coveragePct: Math.round(ndmi.scene.usefulCoveragePct),
+    deviatingPct: ndmi.stats.deviatingPixelsPct,
+  };
   const t = ndmiThresholds(stage);
-  const reading = { ...base, median, sceneDate: ndmi.scene.date, ageDays, deviatingPct };
   if (!t) {
     return {
       ...reading,
-      signal: 'na',
-      text: `NDMI ${fmt(median)} (${ageText(ageDays)}). W tej fazie (${stageWord(stage)}) wskaźnik opisuje głównie glebę lub dojrzewające rośliny, więc nie wnioskujemy z niego o niedoborze wody.`,
+      reason: 'phase',
+      text: `W ${stageWord(stage)} NDMI (${fmt(median)}) opisuje głównie glebę lub dojrzewające rośliny, a nie ich zaopatrzenie w wodę – nie ma z czym porównać.`,
     };
   }
   if (ageDays > MAX_SCENE_AGE_DAYS) {
@@ -113,23 +140,24 @@ export function readNdmi(ndmi: NdmiResult | null, cropId: CropId, evalDate: stri
       ...reading,
       okFrom: t.okFrom,
       stressBelow: t.stressBelow,
-      signal: 'na',
-      text: `Ostatnie bezchmurne zdjęcie jest sprzed ${ageDays} dni (NDMI ${fmt(median)}) – za stare, żeby opisywało stan na dzień analizy.`,
+      reason: 'stale',
+      text: `Ostatnie bezchmurne zdjęcie jest sprzed ${ageDays} dni (NDMI ${fmt(median)}) – za stare, żeby opisywało stan roślin na dzień analizy (najwyżej ${MAX_SCENE_AGE_DAYS} dni).`,
     };
   }
   const signal: SatSignal = median >= t.okFrom ? 'ok' : median < t.stressBelow ? 'stress' : 'watch';
   const verdict =
     signal === 'ok'
-      ? 'rośliny są dobrze uwodnione'
+      ? 'rośliny wyglądają na dobrze uwodnione'
       : signal === 'stress'
         ? 'rośliny wyraźnie tracą wodę'
-        : 'uwodnienie roślin jest słabsze niż w dobrych warunkach';
+        : 'rośliny są słabiej uwodnione niż w dobrych warunkach';
   return {
     ...reading,
     okFrom: t.okFrom,
     stressBelow: t.stressBelow,
     signal,
-    text: `NDMI ${fmt(median)} (${ageText(ageDays)}) – ${verdict} (w ${stageWord(stage)} oczekujemy co najmniej ${fmt(t.okFrom)}).`,
+    reason: null,
+    text: `Na zdjęciu ${ageText(ageDays)} ${verdict} (NDMI ${fmt(median)}; w ${stageWord(stage)} dobre uwodnienie od ${fmt(t.okFrom)}).`,
   };
 }
 
@@ -138,7 +166,7 @@ function stageWord(stage: Stage): string {
 }
 
 function ageText(days: number): string {
-  return days <= 0 ? 'zdjęcie z dnia analizy' : days === 1 ? 'zdjęcie sprzed 1 dnia' : `zdjęcie sprzed ${days} dni`;
+  return days <= 0 ? 'z dnia analizy' : days === 1 ? 'sprzed 1 dnia' : `sprzed ${days} dni`;
 }
 
 export function fmt(v: number): string {

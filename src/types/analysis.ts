@@ -250,10 +250,12 @@ export interface WaterForecast {
   sourceId: string | null;
 }
 
-/** Wynik Sentinel-2 dla głównej zakładki – sygnał pomocniczy obok bilansu wody. */
+/** Wynik Sentinel-2 dla głównej zakładki – osobny sygnał obok bilansu wody; nie zmienia klasy ryzyka. */
 export interface SatelliteSummary {
-  /** ok – obserwacja porównywalna z oczekiwaniem dla uprawy i fazy; no_comparison – jest zdjęcie, ale brak podstaw do porównania; unavailable – brak zdjęcia. */
+  /** ok – obserwacja porównywalna z oczekiwaniem dla uprawy i fazy; no_comparison – jest zdjęcie, ale brak podstaw do porównania; unavailable – brak użytecznego zdjęcia. */
   status: 'ok' | 'no_comparison' | 'unavailable';
+  /** Konkretny powód braku porównania: stara scena, za małe pokrycie, faza uprawy, brak sceny, usługa niedostępna. */
+  reason: 'unavailable' | 'no_scene' | 'low_coverage' | 'stale' | 'phase' | null;
   sceneDate: IsoDate | null;
   /** Odsetek działki widoczny na zdjęciu (po masce chmur i cieni). */
   coveragePct: number | null;
@@ -263,10 +265,16 @@ export interface SatelliteSummary {
   /** Progi dla fazy: dobre uwodnienie od / wyraźny niedobór poniżej. */
   expected: { okFrom: number; stressBelow: number } | null;
   verdict: 'ok' | 'watch' | 'stress' | null;
-  /** Interpretacja dla rolnika albo powód braku porównania. */
-  text: string;
-  /** Jak obserwacja ma się do bilansu wody (tylko gdy porównywalna i jest bilans). */
-  agreement: string | null;
+  /** Co widać na zdjęciu – albo konkretny powód, dla którego nie da się porównać. */
+  photoText: string;
+  /** Wynik bilansu wody prostym językiem (klasa ryzyka pochodzi wyłącznie z bilansu). */
+  balanceLevel: RiskLevel | null;
+  balanceText: string | null;
+  /** Zgodność obserwacji z bilansem: zgodne, różnica o jeden stopień, rozbieżne (różnica o dwa stopnie). */
+  comparison: 'agree' | 'partial' | 'diverge' | null;
+  comparisonText: string | null;
+  /** Co sprawdzić na polu przy rozbieżności. */
+  fieldCheck: string | null;
   sourceId: string;
 }
 

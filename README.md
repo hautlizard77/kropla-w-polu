@@ -149,14 +149,19 @@ wody), przymrozek ≤ 0 °C w młodych fazach, upał ≥ 30 °C, okres najwięks
   Raport podaje opad, który spłynął od 1 marca, i średni spływ w sezonie z 10 lat (mm i m³ z działki). To samo w prognozie.
 - **NDMI (Sentinel-2 → ocena):** mediana NDMI z najnowszej bezchmurnej sceny (≤ 10 dni przed analizą) interpretowana według
   fazy uprawy (Gao 1996): w pełni rozwoju ≥ 0,20 dobre uwodnienie, < 0,05 wyraźny niedobór; w fazie rozwoju 0,10 / −0,05;
-  w fazie początkowej, dojrzewania i poza sezonem NDMI opisuje glebę lub zasychanie – bez wniosków. Obserwacja jest drugim,
-  niezależnym sygnałem: zgodność z bilansem potwierdza wynik, różnica o dwie klasy przesuwa ocenę o jeden stopień w stronę
-  obserwacji i oznacza wynik jako niepewny. Wskaźnik ma oznaczenie „dowód pośredni”.
+  w fazie początkowej, dojrzewania i poza sezonem NDMI opisuje glebę lub zasychanie – bez wniosków. **Klasę ryzyka
+  wyznacza wyłącznie bilans wody** – progi NDMI są orientacyjne, a zdjęcie widzi wodę w liściach, nie w glebie, więc
+  obserwacja nie przestawia klasy. Jest osobnym sygnałem: ta sama klasa – „potwierdza”; różnica o jeden stopień – w granicach
+  dokładności; różnica o dwa stopnie – rozbieżność: raport pokazuje oba wyniki, datę sceny i „Sprawdź stan roślin na polu”
+  z konkretnymi czynnościami (próba gleby z 10–30 cm, więdnięcie liści, choroby/grad/dojrzewanie). Wskaźnik ma oznaczenie
+  „dowód pośredni”. Tabela walidacji (niżej) pokazuje, dlaczego tak: na lekkich glebach bilans bywa ostrzejszy niż NDMI i IUNG.
 - **Satelita × teren:** mediana NDMI w górnej i dolnej trzeciej części wysokości działki (gdy deniwelacja ≥ 1,5 m); suchsza
   górna część to obserwacyjne potwierdzenie odpływu wody w dół stoku. Odsetek pikseli odbiegających od reszty pola też trafia do opisu.
-- **Sentinel-2 w zakładce „Sytuacja wodna”:** karta z datą sceny, pokryciem działki, medianą NDMI, uprawą i fazą oraz
-  interpretacją na tle progów dla tej fazy i zgodnością z bilansem. Gdy faza nie pozwala porównać (wschody, dojrzewanie,
-  poza sezonem) albo zdjęcie jest starsze niż 10 dni – „Brak podstaw do porównania”. NDMI pozostaje sygnałem pomocniczym.
+- **Sentinel-2 w zakładce „Sytuacja wodna”:** karta „Bilans wody a zdjęcie satelitarne” z datą sceny, pokryciem działki,
+  medianą NDMI, uprawą i fazą oraz trzema częściami prostym językiem: co wynika z bilansu (to wyznacza ocenę), co widać na
+  zdjęciu, co sprawdzić na polu (przy rozbieżności). Gdy nie da się porównać – „Brak podstaw do porównania” z konkretnym
+  powodem: zdjęcie za stare (> 10 dni), działka zasłonięta chmurami (pokrycie < 60%, podany najlepszy odsetek), faza uprawy,
+  brak sceny w 45 dniach, usługa niedostępna.
 - **Zalecenia z terenu:** „Zatrzymaj wodę w obniżeniu / spowolnij wodę tam, gdzie spływ zbiera się w strugę” – wskazane miejsce
   z analizy NMT (zagłębienie lub koncentracja spływu) jest zaznaczone na mapie w zakładce „Zalecenia”, z pojemnością i ilością
   wody, która odpływa; każde zalecenie retencyjne ma blok liczb, na których się opiera, i „Do zrobienia w terenie” (konkretna
@@ -377,6 +382,23 @@ Aplikacja nie korzysta z modeli AI w czasie działania – wszystkie wyniki licz
 - NDMI: odrzucanie scen po dacie analizy (dzień w Polsce), statystyki, maska i odchylenia,
 - API: tryb demo, odczyt z bufora, przypadek zachmurzenia; raport dla działki spoza demo bez wymyślonej diagnozy.
 
+- testy na zapisanych danych z prawdziwych usług (`validation/cache/`, bez sieci): zgodność bilansu z NDMI, rozbieżność
+  (klasa bez zmian, oba wyniki, data sceny, „Sprawdź stan roślin na polu”), brak użytecznej sceny (chmury, stara scena,
+  brak zdjęć), miejsce retencji z NMT i uzasadnienie liczbowe (`server/analysis/realData.test.ts`, `observations.test.ts`).
+  Dane syntetyczne służą wyłącznie do testów działania.
+
+**Walidacja na rzeczywistych działkach** – [`docs/walidacja.md`](docs/walidacja.md): 5 działek z gmin Jastrzębia i Pionki
+(pow. radomski), 5 różnych dat z lat 2019–2024. Dla każdej: uprawa, wynik bilansu, wynik NDMI, kontekst regionalny IUNG
+(System Monitoringu Suszy Rolniczej, tabele dla gmin – dane dla gminy i kategorii gleby, nie dla działki) i wniosek.
+Żaden przypadek nie jest zwalidowany – brak niezależnego pomiaru na działkach; uprawy są przyjęte. Odtworzenie offline:
+`npx tsx validation/run.ts` (dane wejściowe pobrane 22.11.2026: ULDK, NASA POWER, SoilGrids, NMT GUGiK, Sentinel-2,
+MPHP10). Główny wniosek: na lekkich glebach bilans wskazuje niedobór częściej niż NDMI i IUNG – dlatego NDMI nie zmienia
+klasy, a rozbieżność kończy się poleceniem sprawdzenia w terenie.
+
+**Raport dla jury** – [`docs/raport-jury.pdf`](docs/raport-jury.pdf): wydruk raportu aplikacji dla działki 142504_2.0017.120
+(Jastrzębia, kukurydza na ziarno, 10 lipca 2023) z prawdziwych danych: diagnoza z bilansu, rozbieżność z Sentinel-2 i polecenie
+sprawdzenia, miejsce retencji z NMT na mapie z liczbami i czynnością w terenie, źródła danych.
+
 **Porównanie z QGIS** (kierunek spływu na prawdziwej działce):
 
 1. W QGIS dodaj warstwę WCS `https://mapy.geoportal.gov.pl/wss/service/PZGIK/NMT/GRID1/WCS/DigitalTerrainModelFormatTIFF`
@@ -388,7 +410,8 @@ Aplikacja nie korzysta z modeli AI w czasie działania – wszystkie wyniki licz
 
 **Dalsze kroki:**
 
-- porównanie oceny z Monitoringiem Suszy Rolniczej IUNG-PIB i EDO (Copernicus) dla tych samych dat,
+- walidacja z pomiarem wilgotności gleby na działkach (sonda 10–30 cm) albo punktami pomiarowymi IUNG; kalibracja
+  zapasu wody dla gleb lekkich (SoilGrids 250 m) i porównanie z EDO (Copernicus),
 - testy na działkach z różnych regionów i lat (np. susze 2015, 2018, 2019) i sprawdzenie, czy ocena historyczna
   nie korzysta z późniejszych obserwacji,
 - przegląd rekomendacji z mentorami-ekspertami (agrotechnika, retencja) i jawne pokazywanie niepewności w raporcie.

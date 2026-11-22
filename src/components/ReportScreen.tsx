@@ -481,20 +481,32 @@ const NDMI_VERDICT: Record<NonNullable<SatelliteSummary['verdict']>, string> = {
   stress: 'Rośliny wyraźnie tracą wodę',
 };
 
+const NO_COMPARISON_REASON: Record<NonNullable<SatelliteSummary['reason']>, string> = {
+  unavailable: 'Zdjęcie nie zostało pobrane',
+  no_scene: 'Brak zdjęcia działki',
+  low_coverage: 'Działka zasłonięta chmurami',
+  stale: 'Zdjęcie za stare',
+  phase: 'Faza uprawy nie pozwala porównać',
+};
+
 const ndmiNumber = (v: number) => v.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** Sentinel-2 w głównej zakładce: data sceny, pokrycie i NDMI na tle oczekiwań dla uprawy i fazy – sygnał pomocniczy. */
+/**
+ * Sentinel-2 w głównej zakładce – osobny sygnał obok bilansu wody. Klasę ryzyka wyznacza bilans; karta pokazuje,
+ * co wynika z bilansu, co widać na zdjęciu i – przy rozbieżności – co sprawdzić na polu.
+ */
 function SatelliteCard({ satellite }: { satellite: SatelliteSummary }) {
-  const comparable = satellite.status === 'ok';
+  const comparable = satellite.status === 'ok' && satellite.verdict !== null;
+  const diverge = satellite.comparison === 'diverge';
   return (
-    <div className={`satellite-card${comparable && satellite.verdict ? ` satellite-card--${satellite.verdict}` : ''}`}>
+    <div className={`satellite-card${diverge ? ' satellite-card--diverge' : comparable && satellite.verdict ? ` satellite-card--${satellite.verdict}` : ''}`}>
       <h3>
-        Obserwacja satelitarna (Sentinel-2) <span className="tag">dowód pośredni</span>
+        Bilans wody a zdjęcie satelitarne (Sentinel-2) <span className="tag">NDMI – sygnał pomocniczy</span>
       </h3>
       <dl className="satellite-card__facts">
         <div>
           <dt>Data sceny</dt>
-          <dd>{satellite.sceneDate ? formatDatePl(satellite.sceneDate) : 'brak bezchmurnej sceny'}</dd>
+          <dd>{satellite.sceneDate ? formatDatePl(satellite.sceneDate) : 'brak użytecznej sceny'}</dd>
         </div>
         <div>
           <dt>Pokrycie działki</dt>
@@ -511,26 +523,53 @@ function SatelliteCard({ satellite }: { satellite: SatelliteSummary }) {
           </dd>
         </div>
       </dl>
-      {comparable && satellite.verdict ? (
-        <>
-          <p className="satellite-card__verdict">
-            <strong>{NDMI_VERDICT[satellite.verdict]}</strong>
-            {satellite.expected && (
-              <span className="muted">
-                {' '}
-                · w tej fazie dobre uwodnienie od {ndmiNumber(satellite.expected.okFrom)}, wyraźny niedobór poniżej {ndmiNumber(satellite.expected.stressBelow)}
-              </span>
-            )}
-          </p>
-          {satellite.agreement && <p>{satellite.agreement}</p>}
-        </>
-      ) : (
-        <p className="satellite-card__verdict">
-          <strong>Brak podstaw do porównania.</strong> <span className="muted">{satellite.text}</span>
+      {diverge && (
+        <p className="satellite-card__alert" role="note">
+          <Icon name="alert" size={18} /> <strong>{satellite.comparisonText}</strong>
         </p>
       )}
+      <div className="satellite-card__compare">
+        {satellite.balanceText && (
+          <div>
+            <h4>Co wynika z bilansu wody</h4>
+            {satellite.balanceLevel && <RiskBadge level={satellite.balanceLevel} />}
+            <p>{satellite.balanceText}</p>
+            <p className="small muted">To wyznacza ocenę ryzyka w raporcie.</p>
+          </div>
+        )}
+        <div>
+          <h4>Co widać na zdjęciu</h4>
+          {comparable && satellite.verdict ? (
+            <>
+              <p>
+                <strong>{NDMI_VERDICT[satellite.verdict]}.</strong> {satellite.photoText}
+              </p>
+              {satellite.expected && (
+                <p className="small muted">
+                  Dla tej fazy: dobre uwodnienie od {ndmiNumber(satellite.expected.okFrom)}, wyraźny niedobór poniżej {ndmiNumber(satellite.expected.stressBelow)}.
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <p>
+                <strong>Brak podstaw do porównania</strong>
+                {satellite.reason && <> – {NO_COMPARISON_REASON[satellite.reason].toLowerCase()}</>}.
+              </p>
+              <p>{satellite.photoText}</p>
+            </>
+          )}
+        </div>
+        {(diverge || (comparable && satellite.comparisonText)) && (
+          <div>
+            <h4>{diverge ? 'Co sprawdzić na polu' : 'Wniosek'}</h4>
+            <p>{diverge ? satellite.fieldCheck : satellite.comparisonText}</p>
+          </div>
+        )}
+      </div>
       <p className="small muted">
-        NDMI mierzy wodę w liściach, nie w glebie – to sygnał pomocniczy. Ocenę wyznacza bilans wody; satelita może ją przesunąć najwyżej o jeden stopień.
+        NDMI mierzy wodę w liściach, nie w glebie, a progi dla faz są orientacyjne – dlatego zdjęcie nie zmienia oceny ryzyka,
+        tylko ją potwierdza albo wskazuje, co sprawdzić w terenie.
       </p>
     </div>
   );

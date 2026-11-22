@@ -7,6 +7,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const memory = new Map<string, unknown>();
+/** Pliki odczytane z dysku (do odtwarzania walidacji na zapisanych danych – validation/run.ts). */
+export const cacheReads = new Set<string>();
 const MAX_MEMORY_ENTRIES = 200;
 
 export const CACHE_DIR = process.env.KROPLA_CACHE_DIR ?? join(process.cwd(), '.cache');
@@ -20,7 +22,9 @@ export async function cacheGet<T>(namespace: string, key: string): Promise<T | n
   const memoryKey = `${namespace}:${key}`;
   if (memory.has(memoryKey)) return memory.get(memoryKey) as T;
   try {
-    const value = JSON.parse(await readFile(fileFor(namespace, key), 'utf8')) as T;
+    const file = fileFor(namespace, key);
+    const value = JSON.parse(await readFile(file, 'utf8')) as T;
+    cacheReads.add(file);
     remember(memoryKey, value);
     return value;
   } catch {

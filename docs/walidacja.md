@@ -1,0 +1,24 @@
+# Walidacja na rzeczywistych działkach
+
+Wygenerowano: `npx tsx validation/run.ts` (offline, z danych w `validation/cache/` pobranych 22.11.2026 z usług: ULDK, Open-Meteo/NASA POWER, SoilGrids, GUGiK NMT, Sentinel-2 L2A; cieki – MPHP10 Wód Polskich).
+
+**Status: żaden przypadek nie jest zwalidowany.** Dla tych działek nie ma niezależnego pomiaru (wilgotność gleby w polu, plon, obserwacja rolnika). Dane IUNG (SMSR) opisują gminę i kategorię gleby, a nie działkę – są kontekstem regionalnym, nie punktem odniesienia. Uprawy są przyjęte, bo nie znamy faktycznych zasiewów.
+
+| # | Działka (gmina) | Uprawa, data | Wynik bilansu (klasa ryzyka) | Wynik NDMI (Sentinel-2) | Kontekst regionalny (IUNG) | Wniosek |
+|---|---|---|---|---|---|---|
+| 1 | 142504_2.0018.127 (Jastrzębia (pow. radomski)) | Pszenica ozima (uprawa przyjęta), 25 czerwca 2019 | podwyższone (zapas 16%) | NDMI 0,17 (scena 22 czerwca 2019, pokrycie 100%) – uwodnienie słabsze | IUNG SMSR: archiwum gmin od 2020 r. – brak | **Niezwalidowany** (brak niezależnego pomiaru na działce). Satelita różni się od bilansu o 1 stopień; brak danych IUNG dla tego roku. |
+| 2 | 142508_2.0005.34 (Pionki – gm. wiejska (pow. radomski)) | Pszenica ozima (uprawa przyjęta), 15 czerwca 2020 | umiarkowane (zapas 40%) | NDMI 0,23 (scena 13 czerwca 2020, pokrycie 82%) – rośliny dobrze uwodnione | [IUNG SMSR, 11 IV–10 VI 2020 (okres 3): brak zagrożenia suszą (zboża ozime, kat. gleby I–IV), 0% pow. gminy](https://susza.iung.pulawy.pl/wykazy/2020,1425082/) | **Niezwalidowany** (brak niezależnego pomiaru na działce). Satelita różni się od bilansu o 1 stopień; kierunek różny od kontekstu gminy. |
+| 3 | 142504_2.0018.65/1 (Jastrzębia (pow. radomski)) | Ziemniaki (uprawa przyjęta), 20 lipca 2022 | podwyższone (zapas 8%) | NDMI 0,34 (scena 13 lipca 2022, pokrycie 100%) – rośliny dobrze uwodnione | [IUNG SMSR, 21 V–20 VII 2022 (okres 7): brak zagrożenia suszą (ziemniak, kat. gleby I–IV), 0% pow. gminy](https://susza.iung.pulawy.pl/wykazy/2022,1425042/) | **Niezwalidowany** (brak niezależnego pomiaru na działce). Satelita i bilans się rozchodzą – „Sprawdź stan roślin na polu”; kierunek różny od kontekstu gminy. |
+| 4 | 142504_2.0017.120 (Jastrzębia (pow. radomski)) | Kukurydza na ziarno (uprawa przyjęta), 10 lipca 2023 | podwyższone (zapas 10%) | NDMI 0,41 (scena 8 lipca 2023, pokrycie 100%) – rośliny dobrze uwodnione | [IUNG SMSR, 11 V–10 VII 2023 (okres 6): zagrożenie suszą na glebach kat. I (kukurydza na ziarno), 32,58% pow. gminy](https://susza.iung.pulawy.pl/wykazy/2023,1425042/) | **Niezwalidowany** (brak niezależnego pomiaru na działce). Satelita i bilans się rozchodzą – „Sprawdź stan roślin na polu”; kierunek zgodny z kontekstem gminy. |
+| 5 | 142508_2.0010.39/2 (Pionki – gm. wiejska (pow. radomski)) | Kukurydza na ziarno (uprawa przyjęta), 5 sierpnia 2024 | umiarkowane (zapas 41%) | brak podstaw do porównania – działka zasłonięta chmurami (najlepsze pokrycie 30%) | [IUNG SMSR, 1 VI–31 VII 2024 (okres 8): brak zagrożenia (zagrożenie było w okresach 5–6: 20,3% i 6,9% pow.), 0% pow. gminy](https://susza.iung.pulawy.pl/wykazy/2024,1425082/) | **Niezwalidowany** (brak niezależnego pomiaru na działce). Satelita bez porównania; kierunek różny od kontekstu gminy. |
+
+## Wnioski
+
+- Porównywalne zdjęcie Sentinel-2 było w 4 z 5 przypadków; w 4 z nich bilans wskazuje większy niedobór niż NDMI, w 2 różnica sięga dwóch klas (raport pokazuje oba wyniki i „Sprawdź stan roślin na polu”).
+- Kierunek bilansu różni się od kontekstu IUNG w 3 z 4 przypadków z danymi IUNG – zawsze w stronę większego niedoboru w bilansie.
+- Wspólny wzorzec: 5 z 5 działek leży według SoilGrids na glebach lekkich, gdzie bilans szybko wyczerpuje mały zapas wody. Prawdopodobne przyczyny: zapas wody z mapy SoilGrids (250 m) mniejszy niż na działce, brak podsiąku wód gruntowych i głębszego ukorzenienia w modelu, uprawa przyjęta zamiast faktycznej.
+- Konsekwencja w kodzie: NDMI nie zmienia klasy ryzyka (progi NDMI są orientacyjne, a zdjęcie widzi liście, nie glebę), ale rozbieżność jest pokazana wprost z poleceniem sprawdzenia w terenie. Do kalibracji potrzebne są pomiary wilgotności gleby na działkach.
+
+Jak czytać: klasę ryzyka wyznacza bilans wody (FAO-56). NDMI jest osobnym sygnałem – „potwierdza” oznacza tę samą klasę, „różni się o 1 stopień” mieści się w dokładności obu metod, „rozchodzą się” oznacza różnicę o dwie klasy i komunikat „Sprawdź stan roślin na polu”. Kierunek względem IUNG porównuje tylko „jest / nie ma niedoboru”, bo IUNG ocenia klimatyczny bilans wodny dla gminy, nie zapas wody w glebie działki.
+
+Co byłoby walidacją: pomiar wilgotności gleby (np. sonda TDR na 10–30 cm) albo plon z działki w tym samym terminie; punkty pomiarowe IUNG („Monitoring wilgotności gleby”) – gdy któryś leży w pobliżu działki o tej samej kategorii gleby.

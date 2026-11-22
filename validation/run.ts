@@ -107,8 +107,10 @@ const CASES: Case[] = [
   },
 ];
 
-/** Przypadek do raportu PDF dla jury: rozbieżność bilansu i NDMI, miejsce retencji z NMT, kontekst IUNG zgodny. */
-const PDF_CASE = '142504_2.0017.120';
+/** Przypadek do raportu PDF dla jury: grunt orny wg WorldCover, bilans i NDMI porównywalne, miejsce retencji z NMT. */
+const PDF_CASE = '142504_2.0018.127';
+
+const LC_VERDICT: Record<string, string> = { arable: 'grunt orny', grassland: 'łąka / pastwisko', mixed: 'częściowo rolna', non_agricultural: 'nierolnicza', unknown: 'nieokreślone' };
 
 const LEVEL: Record<string, string> = { low: 'niskie', moderate: 'umiarkowane', elevated: 'podwyższone', insufficient_data: 'za mało danych' };
 const VERDICT: Record<string, string> = { ok: 'rośliny dobrze uwodnione', watch: 'uwodnienie słabsze', stress: 'wyraźny niedobór' };
@@ -149,11 +151,13 @@ for (const c of CASES) {
     balanceLevel,
     ndmi: ndmiText,
     comparison: s?.comparison ?? null,
+    landCover: r.landCover ? `${LC_VERDICT[r.landCover.verdict]}: ${r.landCover.classes.slice(0, 2).map((c) => `${c.label} ${String(c.pct).replace('.', ',')}%`).join(', ')}` : 'brak danych',
+    landVerdict: r.landCover?.verdict ?? 'unknown',
     ndmiDrier: s?.verdict ? ['ok', 'watch', 'stress'].indexOf(s.verdict) > ['low', 'moderate', 'elevated'].indexOf(balanceLevel) : null,
     soil: `${r.historicalVulnerability.summary.split('(')[0]!.trim()} | ${r.dataSources.find((d) => d.id === 'gleba')?.details ?? ''}`,
     reference: c.iung ? `IUNG SMSR, ${c.iung.period}: ${c.iung.status}${c.iung.sharePct !== null ? `, ${String(c.iung.sharePct).replace('.', ',')}% pow. gminy` : ''}` : 'IUNG SMSR: archiwum gmin od 2020 r. – brak',
     iungUrl: c.iung?.url ?? null,
-    conclusion: `**Niezwalidowany** (brak niezależnego pomiaru na działce). ${satellite}; ${context}.`,
+    conclusion: `**Niezwalidowany** (brak niezależnego pomiaru na działce). ${satellite}; ${context}.${r.landCover?.notice ? ` Pokrycie terenu: ${r.landCover.notice.title.toLowerCase()} – ${r.landCover.notice.severity === 'warning' ? 'ocena dla przyjętej uprawy nie ma tu zastosowania' : 'przyjęta uprawa prawdopodobnie inna'}.` : ''}`,
     validated: false,
     sources: r.dataSources.map((d) => `${d.id}:${d.availability}`).join(' '),
     result: r,
@@ -168,16 +172,16 @@ if (forPdf && 'result' in forPdf) writeFileSync(join(root, 'validation', 'pdf-ca
 const md = [
   '# Walidacja na rzeczywistych działkach',
   '',
-  'Wygenerowano: `npx tsx validation/run.ts` (offline, z danych w `validation/cache/` pobranych 22.11.2026 z usług: ULDK, Open-Meteo/NASA POWER, SoilGrids, GUGiK NMT, Sentinel-2 L2A; cieki – MPHP10 Wód Polskich).',
+  'Wygenerowano: `npx tsx validation/run.ts` (offline, z danych w `validation/cache/` pobranych 22.11.2026 z usług: ULDK, Open-Meteo/NASA POWER, SoilGrids, GUGiK NMT, Sentinel-2 L2A, ESA WorldCover; cieki – MPHP10 Wód Polskich).',
   '',
-  '**Status: żaden przypadek nie jest zwalidowany.** Dla tych działek nie ma niezależnego pomiaru (wilgotność gleby w polu, plon, obserwacja rolnika). Dane IUNG (SMSR) opisują gminę i kategorię gleby, a nie działkę – są kontekstem regionalnym, nie punktem odniesienia. Uprawy są przyjęte, bo nie znamy faktycznych zasiewów.',
+  '**Status: żaden przypadek nie jest zwalidowany.** Dla tych działek nie ma niezależnego pomiaru (wilgotność gleby w polu, plon, obserwacja rolnika). Dane IUNG (SMSR) opisują gminę i kategorię gleby, a nie działkę – są kontekstem regionalnym, nie punktem odniesienia. Uprawy są przyjęte, bo nie znamy faktycznych zasiewów; pokrycie terenu z ESA WorldCover 2021 (odczyt 22.11.2026) pokazuje, czy działka w ogóle jest polem.',
   '',
-  '| # | Działka (gmina) | Uprawa, data | Wynik bilansu (klasa ryzyka) | Wynik NDMI (Sentinel-2) | Kontekst regionalny (IUNG) | Wniosek |',
-  '|---|---|---|---|---|---|---|',
+  '| # | Działka (gmina) | Uprawa, data | Pokrycie terenu (ESA WorldCover 2021) | Wynik bilansu (klasa ryzyka) | Wynik NDMI (Sentinel-2) | Kontekst regionalny (IUNG) | Wniosek |',
+  '|---|---|---|---|---|---|---|---|',
   ...rows.map((row, i) =>
     'error' in row
-      ? `| ${i + 1} | ${row.parcelId} | ${row.cropId}, ${row.date} | błąd: ${row.error} | — | — | — |`
-      : `| ${i + 1} | ${row.parcelId} (${row.gmina}) | ${row.crop} (${row.cropNote}), ${row.dateText} | ${row.balance} | ${row.ndmi} | ${row.iungUrl ? `[${row.reference}](${row.iungUrl})` : row.reference} | ${row.conclusion} |`,
+      ? `| ${i + 1} | ${row.parcelId} | ${row.cropId}, ${row.date} | — | błąd: ${row.error} | — | — | — |`
+      : `| ${i + 1} | ${row.parcelId} (${row.gmina}) | ${row.crop} (${row.cropNote}), ${row.dateText} | ${row.landCover} | ${row.balance} | ${row.ndmi} | ${row.iungUrl ? `[${row.reference}](${row.iungUrl})` : row.reference} | ${row.conclusion} |`,
   ),
   '',
   ...summary(),
@@ -190,20 +194,24 @@ const md = [
 writeFileSync(join(root, 'docs', 'walidacja.md'), md.join('\n'));
 
 function summary(): string[] {
-  const ok = rows.filter((row) => !('error' in row)) as { balanceLevel: string; comparison: string | null; conclusion: string; ndmiDrier: boolean | null; soil: string }[];
-  const comparable = ok.filter((row) => row.comparison !== null);
-  const diverge = comparable.filter((row) => row.comparison === 'diverge').length;
-  const modelDrierThanSat = comparable.filter((row) => row.comparison !== 'agree' && row.ndmiDrier === false).length;
-  const light = ok.filter((row) => /^Gleba lekka/.test(row.soil)).length;
+  type Row = { balanceLevel: string; comparison: string | null; conclusion: string; ndmiDrier: boolean | null; soil: string; landVerdict: string };
+  const ok = rows.filter((row) => !('error' in row)) as Row[];
+  const arable = ok.filter((row) => row.landVerdict === 'arable');
+  const notField = ok.filter((row) => row.landVerdict !== 'arable');
+  const diverge = ok.filter((row) => row.comparison === 'diverge');
+  const divergeNotField = diverge.filter((row) => row.landVerdict !== 'arable').length;
+  const arableComparable = arable.filter((row) => row.comparison !== null);
+  const arablePartialOrAgree = arableComparable.filter((row) => row.comparison !== 'diverge').length;
   const iungMismatch = ok.filter((row) => row.conclusion.includes('różny od kontekstu')).length;
   const iungKnown = ok.filter((row) => !row.conclusion.includes('brak danych IUNG')).length;
+  const light = ok.filter((row) => /^Gleba lekka/.test(row.soil)).length;
   return [
     '## Wnioski',
     '',
-    `- Porównywalne zdjęcie Sentinel-2 było w ${comparable.length} z ${ok.length} przypadków; w ${modelDrierThanSat} z nich bilans wskazuje większy niedobór niż NDMI, w ${diverge} różnica sięga dwóch klas (raport pokazuje oba wyniki i „Sprawdź stan roślin na polu”).`,
-    `- Kierunek bilansu różni się od kontekstu IUNG w ${iungMismatch} z ${iungKnown} przypadków z danymi IUNG – zawsze w stronę większego niedoboru w bilansie.`,
-    `- Wspólny wzorzec: ${light} z ${ok.length} działek leży według SoilGrids na glebach lekkich, gdzie bilans szybko wyczerpuje mały zapas wody.` + ' Prawdopodobne przyczyny: zapas wody z mapy SoilGrids (250 m) mniejszy niż na działce, brak podsiąku wód gruntowych i głębszego ukorzenienia w modelu, uprawa przyjęta zamiast faktycznej.',
-    '- Konsekwencja w kodzie: NDMI nie zmienia klasy ryzyka (progi NDMI są orientacyjne, a zdjęcie widzi liście, nie glebę), ale rozbieżność jest pokazana wprost z poleceniem sprawdzenia w terenie. Do kalibracji potrzebne są pomiary wilgotności gleby na działkach.',
+    `- **Pokrycie terenu wyjaśnia rozbieżności.** Według ESA WorldCover (2021) tylko ${arable.length} z ${ok.length} działek to grunty orne; pozostałe ${notField.length} to łąka albo las – przyjęta uprawa się nie zgadzała. Duże rozbieżności bilansu z NDMI (${divergeNotField} z ${diverge.length}) wystąpiły właśnie tam: NDMI opisywał łąkę lub las, a bilans – kukurydzę lub ziemniaki. Od teraz raport ostrzega o tym wprost.`,
+    `- **Na gruntach ornych bilans i NDMI są spójne:** w ${arablePartialOrAgree} z ${arableComparable.length} porównywalnych przypadków różnica wynosi najwyżej jeden stopień (w granicach dokładności obu metod), przy czym bilans jest ostrzejszy.`,
+    `- Kierunek bilansu różni się od kontekstu IUNG w ${iungMismatch} z ${iungKnown} przypadków z danymi IUNG – zawsze w stronę większego niedoboru w bilansie. ${light} z ${ok.length} działek leży według SoilGrids na glebach lekkich; prawdopodobne przyczyny: zapas wody z mapy 250 m mniejszy niż na działce, brak podsiąku wód gruntowych i głębszego ukorzenienia w modelu.`,
+    '- Konsekwencja w kodzie: klasę wyznacza bilans; NDMI i pokrycie terenu są osobnymi sygnałami z poleceniem sprawdzenia w terenie. Do kalibracji potrzebne są pomiary wilgotności gleby na działkach i znajomość faktycznej uprawy.',
   ];
 }
 writeFileSync(join(root, 'validation', 'used-files.txt'), [...(await import('../server/cache')).cacheReads].map((f) => f.slice(work.length + 1)).sort().join('\n'));

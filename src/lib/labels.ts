@@ -18,6 +18,7 @@ export const RISK_SYMBOLS: Record<RiskLevel, string> = {
 
 export const DATA_KIND_LABELS: Record<DataKind, string> = {
   granice: 'Granice działki',
+  uzytkowanie: 'Użytkowanie terenu',
   teren: 'Ukształtowanie terenu',
   pogoda: 'Pogoda i opady',
   satelita: 'Obserwacje satelitarne',

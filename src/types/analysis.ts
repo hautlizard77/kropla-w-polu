@@ -91,7 +91,7 @@ export interface Parcel {
 export type RiskLevel = 'elevated' | 'moderate' | 'low' | 'insufficient_data';
 
 /** Grupy danych wykorzystywane przez docelowy silnik. */
-export type DataKind = 'granice' | 'teren' | 'pogoda' | 'satelita' | 'gleba' | 'hydrologia';
+export type DataKind = 'granice' | 'uzytkowanie' | 'teren' | 'pogoda' | 'satelita' | 'gleba' | 'hydrologia';
 
 export type Availability = 'available' | 'partial' | 'missing';
 
@@ -250,6 +250,35 @@ export interface WaterForecast {
   sourceId: string | null;
 }
 
+export interface LandCoverClass {
+  code: number;
+  label: string;
+  pct: number;
+}
+
+/** Użytkowanie terenu działki z mapy ESA WorldCover 10 m (2021). */
+export interface LandCover {
+  status: 'ok' | 'unavailable';
+  /** Klasy od największego udziału. */
+  classes: LandCoverClass[];
+  croplandPct: number;
+  grasslandPct: number;
+  /** Uprawy + roślinność trawiasta (łąki, pastwiska). */
+  agriculturalPct: number;
+  verdict: 'arable' | 'grassland' | 'mixed' | 'non_agricultural' | 'unknown';
+  dominant: LandCoverClass | null;
+  pixels: number;
+  message: string;
+  source: import('./terrain').SourceInfo;
+}
+
+/** Ostrzeżenie o użytkowaniu terenu w raporcie (gdy działka nie wygląda na pole tej uprawy). */
+export interface LandUseNotice {
+  severity: 'warning' | 'info';
+  title: string;
+  text: string;
+}
+
 /** Wynik Sentinel-2 dla głównej zakładki – osobny sygnał obok bilansu wody; nie zmienia klasy ryzyka. */
 export interface SatelliteSummary {
   /** ok – obserwacja porównywalna z oczekiwaniem dla uprawy i fazy; no_comparison – jest zdjęcie, ale brak podstaw do porównania; unavailable – brak użytecznego zdjęcia. */
@@ -279,6 +308,8 @@ export interface SatelliteSummary {
 }
 
 export interface AnalysisResult {
+  /** Użytkowanie terenu (ESA WorldCover) i ewentualne ostrzeżenie – tylko w ocenie działek spoza demo. */
+  landCover?: { classes: LandCoverClass[]; verdict: LandCover['verdict']; agriculturalPct: number; notice: LandUseNotice | null };
   /** Sentinel-2 (NDMI) – tylko w ocenie działek spoza demo. */
   satellite?: SatelliteSummary;
   /** Prognoza na najbliższe dni – tylko dla analizy na dziś (lub ostatnie dni) i działek z danymi. */

@@ -283,6 +283,7 @@ function Report({
           <h2 id="sekcja-sytuacja" tabIndex={-1}>
             Sytuacja wodna <CropBadge cropId={request.cropId} />
           </h2>
+          {result.landCover && <LandUseNote landCover={result.landCover} />}
           <div className="assessment-grid">
             <AssessmentCard
               title={`Na dzień ${formatDatePl(currentState.asOf)}`}
@@ -472,6 +473,26 @@ function Report({
         </button>
       </div>
     </article>
+  );
+}
+
+/** Użytkowanie terenu (ESA WorldCover) – ostrzeżenie, gdy działka nie wygląda na pole tej uprawy, i skład pokrycia. */
+function LandUseNote({ landCover }: { landCover: NonNullable<AnalysisResult['landCover']> }) {
+  const composition = landCover.classes
+    .slice(0, 3)
+    .map((c) => `${c.label} ${c.pct.toLocaleString('pl-PL', { maximumFractionDigits: 0 })}%`)
+    .join(', ');
+  const notice = landCover.notice;
+  if (!notice) {
+    return <p className="land-use-line small muted">Pokrycie działki (mapa ESA WorldCover 2021): {composition}.</p>;
+  }
+  return (
+    <div className={`status ${notice.severity === 'warning' ? 'status--warning' : 'status--info'} land-use-note`} role={notice.severity === 'warning' ? 'alert' : 'note'}>
+      <p>
+        <strong>{notice.title}.</strong> {notice.text}
+      </p>
+      <p className="small muted">Pokrycie działki: {composition}.</p>
+    </div>
   );
 }
 

@@ -31,7 +31,7 @@ export function parcelFromLookup(info: ParcelInfo): Parcel {
 /** Skrót wyniku analizy zapamiętywany przy działce – z niego powstają powiadomienia. */
 export function analysisSnapshot(result: AnalysisResult): NonNullable<SavedParcel['lastAnalysis']> {
   const missing = result.dataSources
-    .filter((source) => source.availability === 'missing' && source.id !== 'prognoza' && source.id !== 'hydro' && source.kind !== 'teren' && source.kind !== 'satelita')
+    .filter((source) => source.availability === 'missing' && source.id !== 'prognoza' && source.id !== 'hydro' && source.kind !== 'uzytkowanie' && source.kind !== 'teren' && source.kind !== 'satelita')
     .map((source) => DATA_KIND_LABELS[source.kind]);
   const steps = result.forecast?.status === 'ok' ? result.forecast.steps : [];
   const step = steps.find((s) => s.tone === 'warning') ?? steps[0];

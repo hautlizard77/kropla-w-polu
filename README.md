@@ -106,6 +106,7 @@ Granica z ULDK daje środek działki, a dla niego pobierane są równolegle: pog
 |---|---|---|
 | Pogoda dzienna, 10 lat wstecz | 1. Open-Meteo Archive (ERA5) → 2. NASA POWER (gdy Open-Meteo odmówi, np. limit 429; ET0 liczymy sami wzorem FAO-56 Penman–Monteith) → 3. Open-Meteo Forecast `past_days` uzupełnia ostatnie dni | opad, ET0, opad 30 dni i klimatyczny bilans wodny 60 dni na tle średniej 10 lat |
 | Gleba | ISRIC SoilGrids 2.0 (WCS, 250 m): piasek, ił, węgiel organiczny w 6 warstwach do 2 m | uziarnienie, kategoria gleby, θFC i θWP wzorami Saxton & Rawls (2006), woda dostępna TAW w strefie korzeni |
+| Użytkowanie terenu | ESA WorldCover 10 m 2021 v200 (COG, AWS Open Data, kafel 3° × 3°), odczyt okna działki | udział klas w granicy działki (uprawy, łąki, las, zabudowa, wody); ostrzeżenie, gdy działka nie jest polem albo pokrycie nie pasuje do wybranej uprawy |
 | Cieki i rowy | MPHP10 PGW Wody Polskie (WMS ISOK, GetFeatureInfo) + OpenStreetMap (Overpass, rowy spoza MPHP), promień 300 m | najbliższy ciek/rów i odległość od działki – podstawa zalecenia o zatrzymaniu wody w rowie |
 
 **Granica z ULDK:** przed parsowaniem sprawdzamy status, typ (`text/plain`; HTML z bramy jest odrzucany) i rozmiar odpowiedzi
@@ -315,6 +316,7 @@ Adres usługi ustawia się zmienną `VITE_ANALYSIS_API_URL`, np. w pliku `.env.l
 | Podkład mapy OpenStreetMap | tak – kafelki pobierane w przeglądarce | przy każdym wyświetleniu |
 | Pogoda – Open-Meteo / NASA POWER | tak, przy analizie działki; zakresy starsze niż 10 dni z bufora | zakres dat i ostatni pełny dzień |
 | Gleba – ISRIC SoilGrids 2.0 | tak, przy analizie działki, potem z bufora | data pobrania; mapa modelowa (wersja 2.0) |
+| Użytkowanie terenu – ESA WorldCover 2021 | tak, przy analizie działki, potem z bufora | stan na 2021 r.; data pobrania |
 | Cieki i rowy – MPHP10 Wód Polskich + OpenStreetMap | tak, przy analizie działki | data pobrania; „Brak danych” tylko gdy oba źródła nie odpowiedzą |
 
 Spływ, zastoiska, nachylenie, obszar do sprawdzenia i NDMI **liczy aplikacja** z pobranych danych (pkt 4.2 opisu zadania).
@@ -337,6 +339,7 @@ Ocenę niedoboru wody, historię i zalecenia aplikacja liczy z pogody, gleby i h
 | MET Norway – Locationforecast 2.0 | prognoza zapasowa (gdy Open-Meteo zwróci np. 429) | CC BY 4.0; wymagany identyfikujący User-Agent; ET0 liczone w aplikacji (FAO-56, promieniowanie z zachmurzenia) |
 | NASA POWER (LaRC) | pogoda zapasowa | dane publiczne NASA, wymagane przypisanie źródła |
 | ISRIC SoilGrids 2.0 | gleba | CC BY 4.0 |
+| ESA WorldCover 10 m 2021 v200 (Zanna i in. 2022, doi:10.5281/zenodo.7254221), AWS Open Data | użytkowanie terenu | CC BY 4.0, „© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium” |
 | PGW Wody Polskie – MPHP10, WMS `wody.isok.gov.pl/gpservices/KZGW/ISOK_MPHP/MapServer/WMSServer` | cieki (nazwa, charakter, szerokość, okresowość) | dane publiczne PGW Wody Polskie (Hydroportal ISOK); odpowiedź bez geometrii |
 | OpenStreetMap przez Overpass API | drobne rowy melioracyjne | ODbL; publiczne serwery Overpass mają limity i bywają przeciążone |
 
@@ -349,6 +352,9 @@ Aplikacja nie korzysta z modeli AI w czasie działania – wszystkie wyniki licz
 ## Znane ograniczenia
 
 - Ocena wody to model: start 1 marca z pełnym zapasem, typowy kalendarz uprawy, pogoda z siatki reanalizy (ok. 10–50 km), bez podsiąku wód gruntowych i bez nawadniania wykonanego przez rolnika.
+- Użytkowanie terenu z ESA WorldCover 2021: stan sprzed kilku lat, trafność klas ok. 77%, łąki bywają mylone z uprawami;
+  mapa nie zna faktycznej uprawy. Dlatego tylko ostrzega (np. „działka nie wygląda na grunt rolny”) i nie zmienia wyniku bilansu.
+  Działka przy krawędzi kafla 3° jest liczona tylko w jego granicach.
 - SoilGrids to mapa modelowa 250 m – na konkretnym polu gleba może się różnić; docelowo mapy glebowo-rolnicze IUNG-PIB.
 - Cieki pochodzą z MPHP10 Wód Polskich (publiczny WMS ISOK, warstwa „Odcinki cieków”). GetFeatureInfo nie zwraca geometrii,
   więc odległość to górna granica z pierścieni 50/100/300 m wokół prostokąta działki („do 50 m”). Drobne rowy melioracyjne,
@@ -388,16 +394,18 @@ Aplikacja nie korzysta z modeli AI w czasie działania – wszystkie wyniki licz
   Dane syntetyczne służą wyłącznie do testów działania.
 
 **Walidacja na rzeczywistych działkach** – [`docs/walidacja.md`](docs/walidacja.md): 5 działek z gmin Jastrzębia i Pionki
-(pow. radomski), 5 różnych dat z lat 2019–2024. Dla każdej: uprawa, wynik bilansu, wynik NDMI, kontekst regionalny IUNG
+(pow. radomski), 5 różnych dat z lat 2019–2024. Dla każdej: uprawa, pokrycie terenu (ESA WorldCover), wynik bilansu, wynik NDMI, kontekst regionalny IUNG
 (System Monitoringu Suszy Rolniczej, tabele dla gmin – dane dla gminy i kategorii gleby, nie dla działki) i wniosek.
 Żaden przypadek nie jest zwalidowany – brak niezależnego pomiaru na działkach; uprawy są przyjęte. Odtworzenie offline:
 `npx tsx validation/run.ts` (dane wejściowe pobrane 22.11.2026: ULDK, NASA POWER, SoilGrids, NMT GUGiK, Sentinel-2,
-MPHP10). Główny wniosek: na lekkich glebach bilans wskazuje niedobór częściej niż NDMI i IUNG – dlatego NDMI nie zmienia
-klasy, a rozbieżność kończy się poleceniem sprawdzenia w terenie.
+MPHP10, ESA WorldCover). Wnioski: (1) obie duże rozbieżności bilansu z NDMI wystąpiły na działkach, które według mapy
+pokrycia terenu są łąką albo lasem, a nie polem przyjętej uprawy – raport ostrzega o tym teraz wprost; (2) na gruntach ornych
+bilans i NDMI różnią się najwyżej o jeden stopień; (3) na lekkich glebach bilans wskazuje niedobór częściej niż IUNG.
 
-**Raport dla jury** – [`docs/raport-jury.pdf`](docs/raport-jury.pdf): wydruk raportu aplikacji dla działki 142504_2.0017.120
-(Jastrzębia, kukurydza na ziarno, 10 lipca 2023) z prawdziwych danych: diagnoza z bilansu, rozbieżność z Sentinel-2 i polecenie
-sprawdzenia, miejsce retencji z NMT na mapie z liczbami i czynnością w terenie, źródła danych.
+**Raport dla jury** – [`docs/raport-jury.pdf`](docs/raport-jury.pdf): wydruk raportu aplikacji dla działki 142504_2.0018.127
+(Jastrzębia, grunt orny wg ESA WorldCover, pszenica ozima, 25 czerwca 2019) z prawdziwych danych: diagnoza z bilansu,
+porównanie z Sentinel-2, pokrycie terenu, zalecenia retencyjne (ciek Jastrzębianka, obniżenie terenu na mapie z liczbami
+i czynnością w terenie), źródła danych i ograniczenia.
 
 **Porównanie z QGIS** (kierunek spływu na prawdziwej działce):
 

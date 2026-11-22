@@ -21,6 +21,7 @@ import { isCropId } from '../src/data/crops';
 import type { AnalysisOutcome } from '../src/types/analysis';
 import { ASSESS_VERSION, buildAssessment } from './analysis/assess';
 import { getWaterways } from './sources/hydro';
+import { getLandCover, landCoverUnavailable } from './sources/landcover';
 import { getSoil } from './sources/soil';
 import { addDays, getForecast, getWeather } from './sources/weather';
 import { FORECAST_MAX_AGE_DAYS } from './analysis/forecast';
@@ -178,6 +179,7 @@ export async function ndmi(parcelId: string, date: string): Promise<NdmiResponse
 }
 
 const TERRAIN_WAIT_MS = 15000;
+const LANDCOVER_WAIT_MS = 12000;
 const OBSERVATIONS_WAIT_MS = 24000;
 
 /** Wynik obietnicy albo 'timeout' po ms – sama obietnica liczy się dalej (i zapisze wynik w buforze). */
@@ -222,16 +224,23 @@ export async function analysis(parcelId: string, cropId: string, date: string): 
     const started = Date.now();
     const terrainP = within(terrain(parcelId), TERRAIN_WAIT_MS);
     const ndmiP = terrainP.then(() => within(ndmi(parcelId, date), Math.max(1000, OBSERVATIONS_WAIT_MS - (Date.now() - started))));
-    const [weather, soil, hydro, forecast, terrainRes, ndmiRes] = await Promise.allSettled([
+    const [weather, soil, hydro, forecast, terrainRes, ndmiRes, landCoverRes] = await Promise.allSettled([
       getWeather(lat, lon, start, date, today),
       getSoil(lat, lon),
       getWaterways(parcel.id, parcel.ringWgs84, parcel.ring2180),
       wantsForecast ? getForecast(lat, lon, today) : Promise.resolve(null),
       terrainP,
       ndmiP,
+      within(getLandCover(parcel.id, parcel.ringWgs84), LANDCOVER_WAIT_MS),
     ]);
     const terrainOut = terrainRes.status === 'fulfilled' ? terrainRes.value : null;
     const ndmiOut = ndmiRes.status === 'fulfilled' ? ndmiRes.value : null;
+    const landCover =
+      landCoverRes.status === 'rejected'
+        ? landCoverUnavailable(landCoverRes.reason)
+        : landCoverRes.value === 'timeout'
+          ? landCoverUnavailable(new Error(`brak odpowiedzi w ${LANDCOVER_WAIT_MS / 1000} s`))
+          : landCoverRes.value;
     const result = buildAssessment({
       request: { parcelId: parcel.id, cropId, analysisDate: date },
       parcel,
@@ -241,6 +250,7 @@ export async function analysis(parcelId: string, cropId: string, date: string): 
       forecast: forecast.status === 'fulfilled' ? forecast.value : null,
       forecastError: forecast.status === 'rejected' ? errorText(forecast.reason) : null,
       todayDate: today,
+      landCover,
       terrain: terrainOut && terrainOut !== 'timeout' && terrainOut.status === 'ok' ? terrainOut.result : null,
       terrainError:
         terrainOut === 'timeout' || terrainOut === null
@@ -257,7 +267,7 @@ export async function analysis(parcelId: string, cropId: string, date: string): 
             : null,
     });
     const outcome: AnalysisOutcome = { status: 'ok', result };
-    const complete = terrainOut !== 'timeout' && ndmiOut !== 'timeout' && ndmiOut !== null;
+    const complete = terrainOut !== 'timeout' && ndmiOut !== 'timeout' && ndmiOut !== null && landCover.status === 'ok';
     if (cacheable && complete && result.currentState.level !== 'insufficient_data') await cacheSet('analysis', key, outcome);
     return outcome;
   });

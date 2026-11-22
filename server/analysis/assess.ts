@@ -11,6 +11,8 @@ import type {
   AnalysisResult,
   DataSource,
   Indicator,
+  LandCover,
+  LandUseNotice,
   Recommendation,
   RiskLevel,
   SatelliteSummary,
@@ -25,7 +27,7 @@ import { CROP_PARAMS, STAGE_LABELS, cropDay, type Stage } from '../../src/data/c
 import { readilyAvailableWater, totalAvailableWater } from './waterBalance';
 import { DEFAULT_SLOPE_DEG, curveNumber, fmt, readNdmi, runoffMm, slopeContrast } from './observations';
 
-export const ASSESS_VERSION = 4;
+export const ASSESS_VERSION = 5;
 const STRESS_DAYS_FOR_DEFICIT_SEASON = 15;
 const MAX_DATA_LAG_DAYS = 7;
 
@@ -47,6 +49,8 @@ export interface AssessInput {
   /** NDMI z Sentinel-2 na dzień analizy (najnowsze bezchmurne zdjęcie). */
   ndmi?: NdmiResult | null;
   ndmiError?: string | null;
+  /** Pokrycie terenu działki (ESA WorldCover 2021). */
+  landCover?: LandCover | null;
 }
 
 export interface SimDay {
@@ -132,6 +136,47 @@ function normalWindow(weather: WeatherSeries, end: string, days: number, years: 
   return values.length >= Math.ceil(years / 2) ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null;
 }
 
+/** Ostrzeżenie, gdy pokrycie terenu nie pasuje do pola z wybraną uprawą. */
+export function landUseNoticeFor(lc: LandCover, cropId: AnalysisRequest['cropId']): LandUseNotice | null {
+  const crop = cropLabel(cropId).toLocaleLowerCase('pl-PL');
+  const pctText = (v: number) => `${v.toLocaleString('pl-PL', { maximumFractionDigits: 0 })}%`;
+  const others = lc.classes
+    .filter((c) => c.code !== 40 && c.code !== 30)
+    .slice(0, 2)
+    .map((c) => `${c.label} ${pctText(c.pct)}`)
+    .join(', ');
+  if (lc.verdict === 'non_agricultural') {
+    return {
+      severity: 'warning',
+      title: 'Działka nie wygląda na grunt rolny',
+      text: `Według mapy pokrycia terenu ESA WorldCover (2021) działkę pokrywa głównie ${lc.dominant ? `${lc.dominant.label} (${pctText(lc.dominant.pct)})` : 'teren nierolniczy'}, a grunty rolne to ${pctText(lc.agriculturalPct)}. Ocena zakłada pole z uprawą (${crop}) – jeśli jej tu nie ma, wynik nie ma zastosowania. Mapa jest z 2021 r.: sprawdź, czy użytkowanie się nie zmieniło.`,
+    };
+  }
+  const meadowCrop = cropId === 'uzytki_zielone';
+  if (lc.verdict === 'grassland' && !meadowCrop) {
+    return {
+      severity: 'info',
+      title: 'Na mapie to łąka lub pastwisko',
+      text: `Roślinność trawiasta zajmuje ${pctText(lc.grasslandPct)} działki (ESA WorldCover 2021), a wybrano uprawę: ${crop}. Jeśli działka jest dziś łąką, wybierz „użytki zielone” – inne jest zapotrzebowanie na wodę i głębokość korzeni.`,
+    };
+  }
+  if (lc.verdict === 'arable' && meadowCrop) {
+    return {
+      severity: 'info',
+      title: 'Na mapie to grunt orny',
+      text: `Uprawy zajmują ${pctText(lc.croplandPct)} działki (ESA WorldCover 2021), a wybrano użytki zielone. Jeśli rośnie tu inna uprawa, zmień ją – wynik zależy od uprawy.`,
+    };
+  }
+  if (lc.verdict === 'mixed') {
+    return {
+      severity: 'info',
+      title: 'Działka tylko częściowo rolna',
+      text: `Grunty rolne zajmują ${pctText(lc.agriculturalPct)} działki${others ? `, reszta to m.in.: ${others}` : ''} (ESA WorldCover 2021). Bilans liczymy dla części z uprawą; zdjęcie satelitarne i spływ dotyczą całej działki.`,
+    };
+  }
+  return null;
+}
+
 function riskWord(level: RiskLevel): string {
   return level === 'low' ? 'niskie' : level === 'moderate' ? 'umiarkowane' : level === 'elevated' ? 'podwyższone' : 'nieokreślone';
 }
@@ -189,6 +234,18 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
       details: `Powierzchnia z geometrii: ${pl(parcel.areaHa)} ha.`,
     }),
   );
+  // Użytkowanie terenu – czy działka wygląda na pole tej uprawy.
+  const landCover = input.landCover ?? null;
+  if (landCover?.status === 'ok') {
+    dataSources.push(toDataSource('uzytkowanie', 'uzytkowanie', landCover.source, { license: 'CC BY 4.0 (© ESA WorldCover 2021)', details: landCover.message }));
+  } else {
+    dataSources.push(missingSource('uzytkowanie', 'uzytkowanie', 'Pokrycie terenu ESA WorldCover 10 m (2021)', landCover?.message ?? 'Mapa pokrycia terenu nie została pobrana.'));
+  }
+  const landUseNotice = landCover?.status === 'ok' ? landUseNoticeFor(landCover, request.cropId) : null;
+  if (landUseNotice?.severity === 'warning') {
+    limitations.push('Działka według mapy pokrycia terenu nie jest gruntem rolnym – bilans, NDMI i zalecenia zakładają pole z wybraną uprawą.');
+  }
+  limitations.push('Użytkowanie terenu z mapy ESA WorldCover z 2021 r. (trafność ok. 77%) – późniejsze zmiany i dokładna uprawa nie są widoczne.');
   const weatherOk = weather !== null && weather.lastCompleteDate !== null;
   if (weather && weather.sources.length > 0) {
     weather.sources.forEach((s, i) =>
@@ -269,6 +326,9 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
   };
 
   const base: Omit<AnalysisResult, 'currentState' | 'historicalVulnerability' | 'recommendations' | 'irrigation'> = {
+    ...(landCover?.status === 'ok'
+      ? { landCover: { classes: landCover.classes, verdict: landCover.verdict, agriculturalPct: landCover.agriculturalPct, notice: landUseNotice } }
+      : {}),
     satellite,
     request,
     isDemo: false,
@@ -445,6 +505,7 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
         ? 'Umiarkowane ryzyko niedoboru wody'
         : 'Niskie ryzyko niedoboru wody';
   const summaryParts = [
+    ...(landUseNotice?.severity === 'warning' ? [`Uwaga: ${landUseNotice.title.toLowerCase()} – wynik dotyczy pola z uprawą (${cropName}), którego na mapie nie widać.`] : []),
     `W strefie korzeni (${pl(cropDay(request.cropId, evalDate).zr)} m) uprawa (${cropName}) ma ok. ${mm(today.taw - today.dr)} wody dostępnej dla roślin z ${mm(today.taw)} możliwych (${reservePct}%).`,
     today.dr > today.raw
       ? `Ubytek (${mm(today.dr)}) przekracza próg łatwo dostępnej wody (${mm(today.raw)}) – rośliny mogą ograniczać wzrost.`

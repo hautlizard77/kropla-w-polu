@@ -1,7 +1,8 @@
 /**
  * Test na zapisanych danych z prawdziwych usług (validation/cache/, pobrane 22.11.2026) – bez sieci.
  * Działka 142504_2.0017.120 (Jastrzębia), kukurydza na ziarno, 10 lipca 2023: bilans – podwyższone ryzyko,
- * Sentinel-2 (8 lipca 2023) – rośliny dobrze uwodnione. Klasa zostaje z bilansu, raport pokazuje rozbieżność.
+ * Sentinel-2 (8 lipca 2023) – rośliny dobrze uwodnione. Klasa zostaje z bilansu, raport pokazuje rozbieżność,
+ * a mapa pokrycia terenu ją wyjaśnia: według ESA WorldCover 2021 działkę pokrywa las (91%), nie pole kukurydzy.
  */
 import assert from 'node:assert/strict';
 import { cpSync, mkdtempSync } from 'node:fs';
@@ -34,6 +35,10 @@ test('dane rzeczywiste: rozbieżność bilansu i NDMI nie zmienia klasy; jest da
     assert.ok(place?.suggestedArea, 'miejsce retencji z NMT na mapie');
     assert.ok((place?.evidenceNumbers ?? []).length >= 2, 'uzasadnienie liczbowe');
     assert.equal(r.dataSources.find((d) => d.id === 'nmt')?.availability, 'available');
+    // ESA WorldCover 2021: działka to głównie las – stąd zielone NDMI przy suchym bilansie dla kukurydzy.
+    assert.equal(r.landCover?.verdict, 'non_agricultural');
+    assert.equal(r.landCover?.notice?.severity, 'warning');
+    assert.match(r.currentState.summary, /^Uwaga: działka nie wygląda na grunt rolny/);
   } finally {
     globalThis.fetch = realFetch;
   }

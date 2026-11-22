@@ -223,3 +223,29 @@ test('zalecenie retencyjne z terenu: miejsce na mapie, liczby i czynność w ter
   assert.match(nmt?.limitations.join(' ') ?? '', /GUGiK nie odpowiedział/);
   assert.equal(noTerrain.dataSources.find((s) => s.id === 'hydro')?.availability, 'missing');
 });
+
+test('użytkowanie terenu w raporcie: las – ostrzeżenie w ocenie i źródło; pole – sam skład pokrycia', () => {
+  const weather = weatherOf('2014-03-01', '2024-06-20', dryYears);
+  const lc = (classes: { code: number; label: string; pct: number }[], verdict: 'arable' | 'non_agricultural', agri: number) => ({
+    status: 'ok' as const,
+    classes,
+    croplandPct: classes.find((c) => c.code === 40)?.pct ?? 0,
+    grasslandPct: 0,
+    agriculturalPct: agri,
+    verdict,
+    dominant: classes[0] ?? null,
+    pixels: 100,
+    message: 'Pokrycie działki (ESA WorldCover 2021): …',
+    source: { name: 'Pokrycie terenu ESA WorldCover 10 m (2021)', provider: 'ESA WorldCover', url: null, origin: 'observed' as const, retrievedAt: null, observationDate: '2021-12-31', resolutionM: 10, durationMs: null, notes: [] },
+  });
+  const forest = buildAssessment({ request: dryReq, parcel, weather, soil, hydro: null, landCover: lc([{ code: 10, label: 'las i zadrzewienia', pct: 85 }, { code: 40, label: 'grunty orne (uprawy)', pct: 15 }], 'non_agricultural', 15) });
+  assert.equal(forest.landCover?.notice?.severity, 'warning');
+  assert.match(forest.currentState.summary, /^Uwaga: działka nie wygląda na grunt rolny/);
+  assert.equal(forest.dataSources.find((d) => d.id === 'uzytkowanie')?.availability, 'available');
+  assert.ok(forest.limitations.some((l) => /nie jest gruntem rolnym/.test(l)));
+  const field = buildAssessment({ request: dryReq, parcel, weather, soil, hydro: null, landCover: lc([{ code: 40, label: 'grunty orne (uprawy)', pct: 97 }], 'arable', 97) });
+  assert.equal(field.landCover?.notice, null);
+  assert.doesNotMatch(field.currentState.summary, /^Uwaga/);
+  const none = buildAssessment({ request: dryReq, parcel, weather, soil, hydro: null });
+  assert.equal(none.dataSources.find((d) => d.id === 'uzytkowanie')?.availability, 'missing');
+});

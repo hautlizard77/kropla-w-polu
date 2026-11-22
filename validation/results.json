@@ -10,13 +10,15 @@
   "balanceLevel": "elevated",
   "ndmi": "NDMI 0,17 (scena 22 czerwca 2019, pokrycie 100%) – uwodnienie słabsze",
   "comparison": "partial",
+  "landCover": "grunt orny: grunty orne (uprawy) 89,6%, roślinność trawiasta (łąki, pastwiska) 8,8%",
+  "landVerdict": "arable",
   "ndmiDrier": false,
   "soil": "Gleba lekka słabo zatrzymuje wodę | Wierzchnia warstwa: piasek gliniasty.",
   "reference": "IUNG SMSR: archiwum gmin od 2020 r. – brak",
   "iungUrl": null,
   "conclusion": "**Niezwalidowany** (brak niezależnego pomiaru na działce). Satelita różni się od bilansu o 1 stopień; brak danych IUNG dla tego roku.",
   "validated": false,
-  "sources": "uldk:available pogoda0:available gleba:available hydro:available nmt:available s2:available"
+  "sources": "uldk:available uzytkowanie:available pogoda0:available gleba:available hydro:available nmt:available s2:available"
  },
  {
   "parcelId": "142508_2.0005.34",
@@ -29,13 +31,15 @@
   "balanceLevel": "moderate",
   "ndmi": "NDMI 0,23 (scena 13 czerwca 2020, pokrycie 82%) – rośliny dobrze uwodnione",
   "comparison": "partial",
+  "landCover": "grunt orny: grunty orne (uprawy) 88,9%, roślinność trawiasta (łąki, pastwiska) 11,1%",
+  "landVerdict": "arable",
   "ndmiDrier": false,
   "soil": "Gleba lekka słabo zatrzymuje wodę | Wierzchnia warstwa: piasek gliniasty.",
   "reference": "IUNG SMSR, 11 IV–10 VI 2020 (okres 3): brak zagrożenia suszą (zboża ozime, kat. gleby I–IV), 0% pow. gminy",
   "iungUrl": "https://susza.iung.pulawy.pl/wykazy/2020,1425082/",
   "conclusion": "**Niezwalidowany** (brak niezależnego pomiaru na działce). Satelita różni się od bilansu o 1 stopień; kierunek różny od kontekstu gminy.",
   "validated": false,
-  "sources": "uldk:available pogoda0:available gleba:available hydro:available nmt:missing s2:available"
+  "sources": "uldk:available uzytkowanie:available pogoda0:available gleba:available hydro:available nmt:missing s2:available"
  },
  {
   "parcelId": "142504_2.0018.65/1",
@@ -48,13 +52,15 @@
   "balanceLevel": "elevated",
   "ndmi": "NDMI 0,34 (scena 13 lipca 2022, pokrycie 100%) – rośliny dobrze uwodnione",
   "comparison": "diverge",
+  "landCover": "łąka / pastwisko: roślinność trawiasta (łąki, pastwiska) 92,6%, zabudowa 7,4%",
+  "landVerdict": "grassland",
   "ndmiDrier": false,
   "soil": "Gleba lekka słabo zatrzymuje wodę | Wierzchnia warstwa: piasek gliniasty.",
   "reference": "IUNG SMSR, 21 V–20 VII 2022 (okres 7): brak zagrożenia suszą (ziemniak, kat. gleby I–IV), 0% pow. gminy",
   "iungUrl": "https://susza.iung.pulawy.pl/wykazy/2022,1425042/",
-  "conclusion": "**Niezwalidowany** (brak niezależnego pomiaru na działce). Satelita i bilans się rozchodzą – „Sprawdź stan roślin na polu”; kierunek różny od kontekstu gminy.",
+  "conclusion": "**Niezwalidowany** (brak niezależnego pomiaru na działce). Satelita i bilans się rozchodzą – „Sprawdź stan roślin na polu”; kierunek różny od kontekstu gminy. Pokrycie terenu: na mapie to łąka lub pastwisko – przyjęta uprawa prawdopodobnie inna.",
   "validated": false,
-  "sources": "uldk:available pogoda0:available gleba:available hydro:available nmt:available s2:available"
+  "sources": "uldk:available uzytkowanie:available pogoda0:available gleba:available hydro:available nmt:available s2:available"
  },
  {
   "parcelId": "142504_2.0017.120",
@@ -67,13 +73,15 @@
   "balanceLevel": "elevated",
   "ndmi": "NDMI 0,41 (scena 8 lipca 2023, pokrycie 100%) – rośliny dobrze uwodnione",
   "comparison": "diverge",
+  "landCover": "nierolnicza: las i zadrzewienia 91,4%, roślinność trawiasta (łąki, pastwiska) 5,2%",
+  "landVerdict": "non_agricultural",
   "ndmiDrier": false,
   "soil": "Gleba lekka słabo zatrzymuje wodę | Wierzchnia warstwa: piasek gliniasty.",
   "reference": "IUNG SMSR, 11 V–10 VII 2023 (okres 6): zagrożenie suszą na glebach kat. I (kukurydza na ziarno), 32,58% pow. gminy",
   "iungUrl": "https://susza.iung.pulawy.pl/wykazy/2023,1425042/",
-  "conclusion": "**Niezwalidowany** (brak niezależnego pomiaru na działce). Satelita i bilans się rozchodzą – „Sprawdź stan roślin na polu”; kierunek zgodny z kontekstem gminy.",
+  "conclusion": "**Niezwalidowany** (brak niezależnego pomiaru na działce). Satelita i bilans się rozchodzą – „Sprawdź stan roślin na polu”; kierunek zgodny z kontekstem gminy. Pokrycie terenu: działka nie wygląda na grunt rolny – ocena dla przyjętej uprawy nie ma tu zastosowania.",
   "validated": false,
-  "sources": "uldk:available pogoda0:available gleba:available hydro:available nmt:available s2:available"
+  "sources": "uldk:available uzytkowanie:available pogoda0:available gleba:available hydro:available nmt:available s2:available"
  },
  {
   "parcelId": "142508_2.0010.39/2",
@@ -86,12 +94,14 @@
   "balanceLevel": "moderate",
   "ndmi": "brak podstaw do porównania – działka zasłonięta chmurami (najlepsze pokrycie 30%)",
   "comparison": null,
+  "landCover": "nierolnicza: las i zadrzewienia 98,5%, roślinność trawiasta (łąki, pastwiska) 1,1%",
+  "landVerdict": "non_agricultural",
   "ndmiDrier": null,
   "soil": "Gleba lekka słabo zatrzymuje wodę | Wierzchnia warstwa: glina piaszczysta.",
   "reference": "IUNG SMSR, 1 VI–31 VII 2024 (okres 8): brak zagrożenia (zagrożenie było w okresach 5–6: 20,3% i 6,9% pow.), 0% pow. gminy",
   "iungUrl": "https://susza.iung.pulawy.pl/wykazy/2024,1425082/",
-  "conclusion": "**Niezwalidowany** (brak niezależnego pomiaru na działce). Satelita bez porównania; kierunek różny od kontekstu gminy.",
+  "conclusion": "**Niezwalidowany** (brak niezależnego pomiaru na działce). Satelita bez porównania; kierunek różny od kontekstu gminy. Pokrycie terenu: działka nie wygląda na grunt rolny – ocena dla przyjętej uprawy nie ma tu zastosowania.",
   "validated": false,
-  "sources": "uldk:available pogoda0:available gleba:available hydro:available nmt:missing s2:available"
+  "sources": "uldk:available uzytkowanie:available pogoda0:available gleba:available hydro:available nmt:missing s2:available"
  }
 ]

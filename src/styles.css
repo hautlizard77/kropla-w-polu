@@ -3775,3 +3775,25 @@ details > summary:hover {
 .satellite-card__compare p {
   margin: 0.3rem 0;
 }
+
+/* Użytkowanie terenu (ESA WorldCover) w „Sytuacji wodnej”. */
+.status--warning {
+  background: var(--risk-moderate-bg);
+  border-color: #f0d9a8;
+  border-left-color: var(--risk-moderate);
+}
+
+.land-use-note {
+  margin: 0 0 1rem;
+}
+
+.land-use-line {
+  margin: -0.4rem 0 0.8rem;
+}
+
+@media print {
+  .status--warning {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

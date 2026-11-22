@@ -3427,8 +3427,8 @@ details > summary:hover {
 /* Leaflet: przy ułamkowym powiększeniu między kafelkami podkładu widać jasne szczeliny – lekko powiększamy kafelki. */
 .leaflet-container .leaflet-tile {
   outline: 1px solid transparent;
-  width: 231px !important;
-  height: 231px !important;
+  width: 257px !important;
+  height: 257px !important;
 }
 
 @media print {

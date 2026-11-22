@@ -13,6 +13,7 @@ import type {
   Indicator,
   Recommendation,
   RiskLevel,
+  SatelliteSummary,
 } from '../../src/types/analysis';
 import type { NdmiResult, ParcelInfo, SourceInfo, TerrainResult, Xy } from '../../src/types/terrain';
 import { epsg2180ToWgs84 } from '../geo/proj';
@@ -20,7 +21,7 @@ import { distanceText, type HydroResult } from '../sources/hydro';
 import type { SoilProfile } from '../sources/soil';
 import { addDays, type ForecastSeries, type WeatherSeries } from '../sources/weather';
 import { FORECAST_MAX_AGE_DAYS, FORECAST_SOURCE_ID, buildForecast, notApplicableForecast, unavailableForecast } from './forecast';
-import { CROP_PARAMS, cropDay, type Stage } from '../../src/data/cropParams';
+import { CROP_PARAMS, STAGE_LABELS, cropDay, type Stage } from '../../src/data/cropParams';
 import { readilyAvailableWater, totalAvailableWater } from './waterBalance';
 import { DEFAULT_SLOPE_DEG, curveNumber, fmt, readNdmi, runoffMm, slopeContrast } from './observations';
 
@@ -243,7 +244,23 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
     'NDMI to wskaźnik pośredni (woda w liściach, nie w glebie); interpretujemy go tylko w fazach, gdy łan zakrywa glebę.',
   );
 
+  const reading = readNdmi(ndmi, request.cropId, request.analysisDate, input.ndmiError ?? null);
+  const satellite: SatelliteSummary = {
+    status: reading.signal !== 'na' ? 'ok' : reading.median !== null ? 'no_comparison' : 'unavailable',
+    sceneDate: reading.sceneDate,
+    coveragePct: ndmi?.scene ? Math.round(ndmi.scene.usefulCoveragePct) : null,
+    ndmiMedian: reading.median,
+    cropName: cropLabel(request.cropId),
+    stageLabel: STAGE_LABELS[reading.stage],
+    expected: reading.okFrom !== null && reading.stressBelow !== null ? { okFrom: reading.okFrom, stressBelow: reading.stressBelow } : null,
+    verdict: reading.signal === 'na' ? null : reading.signal,
+    text: reading.text,
+    agreement: null,
+    sourceId: 's2',
+  };
+
   const base: Omit<AnalysisResult, 'currentState' | 'historicalVulnerability' | 'recommendations' | 'irrigation'> = {
+    satellite,
     request,
     isDemo: false,
     scenarioId: null,
@@ -373,12 +390,31 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
   const runs = [1, 0.75, 1.25].map((scale) => simulate(weather, { cropId: request.cropId, horizons: soil.horizons, tawScale: scale, from, to: evalDate, curveNumber: cn }));
   const [mainRun, lowRun, highRun] = runs as [SimDay[], SimDay[], SimDay[]];
   const today = mainRun[mainRun.length - 1];
-  if (!today) {
-    return { ...base, currentState: insufficient(request, weatherIndicators), historicalVulnerability: insufficientHistory(), recommendations: [], irrigation: { status: 'not_calculated', note: 'Brak bilansu.' }, forecast: forecastFor(null, evalDate) };
+  // Bilans zatrzymuje się na pierwszym dniu bez danych. Jeśli nie doszedł do dnia oceny, w serii jest luka –
+  // stan „na dziś” byłby zgadywany, więc nie oceniamy go i nie dajemy zaleceń opartych na bieżącym bilansie.
+  if (!today || today.date !== evalDate) {
+    const lastReliable = today?.date ?? null;
+    const gapDay = lastReliable ? addDays(lastReliable, 1) : from;
+    limitations.push(`Luka w danych pogodowych od ${formatDate(gapDay)} – bilansu nie liczymy dalej niż do ostatniego dnia z kompletem danych.`);
+    return {
+      ...base,
+      currentState: {
+        asOf: request.analysisDate,
+        level: 'insufficient_data',
+        headline: 'Za mało danych do oceny stresu wodnego',
+        summary: `W danych pogodowych brakuje dnia ${formatDate(gapDay)}, więc bilansu wody nie da się policzyć do ${formatDate(evalDate)}. ${
+          lastReliable ? `Ostatni dzień z wiarygodnym bilansem: ${formatDate(lastReliable)}.` : 'Od początku sezonu (1 marca) nie ma wiarygodnego bilansu.'
+        } Zalecenia oparte na bieżącym stanie wody w glebie są wstrzymane.`,
+        indicators: weatherIndicators,
+      },
+      historicalVulnerability: insufficientHistory(),
+      recommendations: [],
+      irrigation: { status: 'not_calculated', note: 'Bez kompletnego bilansu wody nie oceniamy zasadności nawadniania.' },
+      forecast: forecastFor(null, evalDate),
+    };
   }
   const modelLevel = classify(today.dr, today.taw, today.raw);
   // Satelita jako drugi, niezależny sygnał: przy wyraźnej rozbieżności korygujemy ocenę o jeden stopień w stronę obserwacji.
-  const reading = readNdmi(ndmi, request.cropId, request.analysisDate, input.ndmiError ?? null);
   const order = ['low', 'moderate', 'elevated'] as const;
   const modelScore = order.indexOf(modelLevel);
   const satScore = reading.signal === 'ok' ? 0 : reading.signal === 'watch' ? 1 : reading.signal === 'stress' ? 2 : null;
@@ -406,6 +442,12 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
       : `Ubytek (${mm(today.dr)}) nie przekracza progu łatwo dostępnej wody (${mm(today.raw)}).`,
   ];
   if (reading.signal !== 'na' && satGap !== null) {
+    satellite.agreement =
+      satGap === 0
+        ? 'Obserwacja potwierdza wynik bilansu wody.'
+        : Math.abs(satGap) === 1
+          ? 'Obserwacja tylko częściowo zgadza się z bilansem wody.'
+          : 'Obserwacja nie zgadza się z bilansem – ocenę przesunięto o jeden stopień w jej stronę; sprawdź rośliny w terenie.';
     summaryParts.push(
       `Satelita: ${reading.text} ${
         satGap === 0
@@ -529,6 +571,12 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
         'Czy spiętrzenie nie podtopi sąsiednich działek, dróg ani drenażu?',
         'Potwierdź przebieg rowu w terenie – mapy (MPHP, OpenStreetMap) nie zawsze są aktualne.',
       ],
+      fieldTask: `Przejdź wzdłuż ${w.kind.startsWith('rów') ? 'rowu' : 'cieku'} przy działce i wybierz miejsce na zastawkę lub próg: wąski odcinek ze stabilnymi brzegami, poniżej miejsca, gdzie woda z pola wpływa do ${w.kind.startsWith('rów') ? 'rowu' : 'cieku'}.`,
+      evidenceNumbers: [
+        { label: 'Odległość od działki', value: distanceText(w) },
+        ...(w.details ? [{ label: 'Charakter', value: w.details }] : []),
+        { label: 'Sezony z niedoborem wody', value: `${deficitSeasons} z ${seasonsCounted}` },
+      ],
       suggestedArea: null,
     });
   }
@@ -569,13 +617,18 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
         .join(', ')}. Zapas wody zgromadzony wiosną opóźnia ten niedobór.`,
       evidenceSourceIds: ['pogoda0', 'gleba', 'nmt'],
       fieldChecks: ['Miejsca, w których woda spływa z pola po roztopach i ulewach.', 'Stan rowów i przepustów na granicy działki.'],
+      fieldTask: 'Przed roztopami (luty–marzec) sprawdź, którędy woda opuszcza pole, i zamknij lub przytkaj odpływ (zastawka, próg, zasyp bruzdy odpływowej), jeśli nie podtopi to sąsiednich działek.',
+      evidenceNumbers: [
+        { label: 'Sezony z niedoborem wody', value: `${deficitSeasons} z ${seasonsCounted}` },
+        { label: 'Pełny zapas wody w glebie (TAW)', value: mm(tawMax) },
+      ],
       suggestedArea: null,
     });
   }
 
   const candidate = terrain?.retentionCandidate ?? null;
   const waterMatters = histLevel === 'elevated' || histLevel === 'moderate' || level !== 'low';
-  if (candidate && (waterMatters || avgRunoff >= 5)) {
+  if (candidate && (waterMatters || avgRunoff >= 1 || recommendations.some((r) => r.category === 'retencja'))) {
     const ring = candidate.ring.map((p) => epsg2180ToWgs84(p as Xy) as [number, number]);
     recommendations.push({
       id: 'rec-miejsce',
@@ -585,7 +638,7 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
         candidate.kind === 'depression'
           ? 'W zaznaczonym obniżeniu woda zbiera się naturalnie: można je pogłębić w płytkie zagłębienie retencyjne (oczko śródpolne) albo zostawić pod trwałą roślinnością, żeby woda wsiąkała, zamiast odpływać.'
           : 'W zaznaczonym miejscu spływ z pola skupia się w jedną strugę: pas zadarnienia w poprzek spływu, niski wał lub próg z faszyny spowolnią wodę i dadzą jej czas wsiąknąć.',
-      rationale: `${candidate.reasons.join(' ')} ${candidate.metrics.map((m) => `${m.label}: ${m.value}`).join('; ')}. ${
+      rationale: `${candidate.reasons.join(' ')} ${
         avgRunoff >= 1 ? `W ostatnich ${runoffSeasons.length} sezonach z pola spływało średnio ok. ${mm(avgRunoff)} wody na sezon (ok. ${m3PerParcel(avgRunoff).toLocaleString('pl-PL')} m³ z całej działki).` : ''
       }${upperDrier && contrast ? ` Satelita pokazuje suchszą górną część pola (NDMI ${fmt(contrast.upperMedian)} wobec ${fmt(contrast.lowerMedian)} niżej).` : ''}`,
       evidenceSourceIds: ['nmt', 'pogoda0', 'gleba', ...(upperDrier ? ['s2'] : [])],
@@ -593,6 +646,19 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
         'Czy w tym miejscu po roztopach i ulewach stoi lub płynie woda?',
         'Czy nie ma tu drenażu, który odprowadza wodę z obniżenia?',
         'Zbiornik lub budowla piętrząca może wymagać zgłoszenia wodnoprawnego.',
+      ],
+      fieldTask:
+        candidate.kind === 'depression'
+          ? 'Po najbliższych roztopach lub ulewie obejdź zaznaczone obniżenie i oznacz palikami zasięg stojącej wody – to granica przyszłego zagłębienia retencyjnego.'
+          : 'Po najbliższej ulewie sprawdź zaznaczone miejsce: gdzie płynie struga i czy wymywa glebę – tam wytycz pas zadarnienia w poprzek spływu (szer. co najmniej 6 m).',
+      evidenceNumbers: [
+        ...candidate.metrics.map((m) => ({ label: m.label.charAt(0).toLocaleUpperCase('pl-PL') + m.label.slice(1), value: m.value })),
+        ...(avgRunoff >= 1
+          ? [
+              { label: 'Średni spływ z działki w sezonie', value: `${mm(avgRunoff)} (ok. ${m3PerParcel(avgRunoff).toLocaleString('pl-PL')} m³)` },
+              { label: 'Średnie nachylenie działki', value: `${pl(slopeDeg)}°` },
+            ]
+          : []),
       ],
       suggestedArea: { label: candidate.title, geometry: { type: 'Polygon', coordinates: [[...ring, ring[0]!]] } },
     });
@@ -608,6 +674,12 @@ export function buildAssessment(input: AssessInput): AnalysisResult {
       }`,
       evidenceSourceIds: ['nmt', 'pogoda0', ...(upperDrier ? ['s2'] : [])],
       fieldChecks: ['Ślady spływu po ulewach: żłobiny, namyta ziemia u podnóża stoku.', 'Czy kierunek uprawy można zmienić bez utrudnień dla maszyn?'],
+      fieldTask: 'Przy najbliższej uprawie wyznacz kierunek przejazdów w poprzek spadku (wzdłuż poziomic) – kierunek spadku pokazują strzałki w zakładce „Teren i spływ 3D”.',
+      evidenceNumbers: [
+        { label: 'Średnie nachylenie', value: `${pl(slopeDeg)}°` },
+        { label: 'Część działki o nachyleniu ponad 5°', value: `${steepPct}%` },
+        { label: 'Średni spływ w sezonie', value: `${mm(avgRunoff)} (ok. ${m3PerParcel(avgRunoff).toLocaleString('pl-PL')} m³)` },
+      ],
       suggestedArea: null,
     });
   }
@@ -709,16 +781,6 @@ function missingSource(id: string, kind: DataSource['kind'], name: string, reaso
     coverage: null,
     limitations: [reason],
     details: null,
-  };
-}
-
-function insufficient(request: AnalysisRequest, indicators: Indicator[]) {
-  return {
-    asOf: request.analysisDate,
-    level: 'insufficient_data' as const,
-    headline: 'Za mało danych do oceny stresu wodnego',
-    summary: 'Nie udało się policzyć bilansu wody.',
-    indicators,
   };
 }
 

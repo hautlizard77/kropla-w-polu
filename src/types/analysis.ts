@@ -146,6 +146,10 @@ export interface Recommendation {
   evidenceSourceIds: string[];
   /** Co sprawdzić w terenie przed wykonaniem. */
   fieldChecks: string[];
+  /** Konkretna czynność do wykonania w terenie (pierwszy krok). */
+  fieldTask?: string;
+  /** Liczby, na których opiera się zalecenie (np. pojemność obniżenia, ilość spływu). */
+  evidenceNumbers?: { label: string; value: string }[];
   /** Sugerowany obszar działania na mapie (opcjonalny). */
   suggestedArea: { label: string; geometry: PolygonGeometry } | null;
 }
@@ -246,7 +250,29 @@ export interface WaterForecast {
   sourceId: string | null;
 }
 
+/** Wynik Sentinel-2 dla głównej zakładki – sygnał pomocniczy obok bilansu wody. */
+export interface SatelliteSummary {
+  /** ok – obserwacja porównywalna z oczekiwaniem dla uprawy i fazy; no_comparison – jest zdjęcie, ale brak podstaw do porównania; unavailable – brak zdjęcia. */
+  status: 'ok' | 'no_comparison' | 'unavailable';
+  sceneDate: IsoDate | null;
+  /** Odsetek działki widoczny na zdjęciu (po masce chmur i cieni). */
+  coveragePct: number | null;
+  ndmiMedian: number | null;
+  cropName: string;
+  stageLabel: string;
+  /** Progi dla fazy: dobre uwodnienie od / wyraźny niedobór poniżej. */
+  expected: { okFrom: number; stressBelow: number } | null;
+  verdict: 'ok' | 'watch' | 'stress' | null;
+  /** Interpretacja dla rolnika albo powód braku porównania. */
+  text: string;
+  /** Jak obserwacja ma się do bilansu wody (tylko gdy porównywalna i jest bilans). */
+  agreement: string | null;
+  sourceId: string;
+}
+
 export interface AnalysisResult {
+  /** Sentinel-2 (NDMI) – tylko w ocenie działek spoza demo. */
+  satellite?: SatelliteSummary;
   /** Prognoza na najbliższe dni – tylko dla analizy na dziś (lub ostatnie dni) i działek z danymi. */
   forecast?: WaterForecast;
   request: AnalysisRequest;

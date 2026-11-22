@@ -108,6 +108,12 @@ Granica z ULDK daje środek działki, a dla niego pobierane są równolegle: pog
 | Gleba | ISRIC SoilGrids 2.0 (WCS, 250 m): piasek, ił, węgiel organiczny w 6 warstwach do 2 m | uziarnienie, kategoria gleby, θFC i θWP wzorami Saxton & Rawls (2006), woda dostępna TAW w strefie korzeni |
 | Cieki i rowy | MPHP10 PGW Wody Polskie (WMS ISOK, GetFeatureInfo) + OpenStreetMap (Overpass, rowy spoza MPHP), promień 300 m | najbliższy ciek/rów i odległość od działki – podstawa zalecenia o zatrzymaniu wody w rowie |
 
+**Granica z ULDK:** przed parsowaniem sprawdzamy status, typ (`text/plain`; HTML z bramy jest odrzucany) i rozmiar odpowiedzi
+(do 2 MB). Przy HTTP 429/503 z `Retry-After` czekamy tyle, ile prosi usługa, jeśli zmieści się to w limicie 25 s na całe
+wyszukanie. Sprawdzona granica (punkty w zasięgu EPSG:2180, dodatnia powierzchnia) trafia do bufora; po 30 dniach
+sprawdzamy ją ponownie, a gdy ULDK jest wtedy niedostępne – używamy wersji z bufora z adnotacją w źródłach. Bez bufora
+rolnik dostaje komunikat o niedostępności ewidencji bez kodów technicznych (szczegóły w logu serwera).
+
 **Uprawy:** 27 upraw w 7 grupach (zboża, okopowe, oleiste, strączkowe, pastewne i użytki zielone, warzywa, owoce i sady),
 parametry w `src/data/cropParams.ts`. Raport ma sekcję „Twoja uprawa”: faza na dzień analizy, zapotrzebowanie na wodę,
 głębokość korzeni, wrażliwość na suszę, kalendarz sezonu z miesiącami niedoborów i przełącznik do porównania z inną uprawą.
@@ -131,6 +137,9 @@ wody), przymrozek ≤ 0 °C w młodych fazach, upał ≥ 30 °C, okres najwięks
 - historia: te same obliczenia dla 10 poprzednich sezonów; sezon z niedoborem to ≥ 15 dni stresu, miesiąc krytyczny – stres w ≥ 30% sezonów;
 - dane późniejsze niż data analizy nie są używane (test w `server/analysis/analysis.test.ts`);
 - gdy pogoda kończy się ponad 7 dni przed datą analizy albo brak gleby – raport mówi „Za mało danych” i nie daje zaleceń.
+- luka w serii pogodowej (np. brak 1 kwietnia przy analizie na 30 czerwca): bilans zatrzymuje się na ostatnim kompletnym dniu,
+  raport mówi „Za mało danych”, podaje ostatnią wiarygodną datę i wstrzymuje zalecenia oparte na bieżącym bilansie
+  (test w `server/analysis/analysis.test.ts`).
 
 **Teren i satelita w diagnozie** (`server/analysis/observations.ts`). Ocena czeka na NMT do 15 s, a na NDMI łącznie do 24 s
 (równolegle z pogodą i glebą); gdy nie zdążą, liczą się w tle, ocena mówi, czego zabrakło, i nie trafia do bufora.
@@ -145,9 +154,14 @@ wody), przymrozek ≤ 0 °C w młodych fazach, upał ≥ 30 °C, okres najwięks
   obserwacji i oznacza wynik jako niepewny. Wskaźnik ma oznaczenie „dowód pośredni”.
 - **Satelita × teren:** mediana NDMI w górnej i dolnej trzeciej części wysokości działki (gdy deniwelacja ≥ 1,5 m); suchsza
   górna część to obserwacyjne potwierdzenie odpływu wody w dół stoku. Odsetek pikseli odbiegających od reszty pola też trafia do opisu.
+- **Sentinel-2 w zakładce „Sytuacja wodna”:** karta z datą sceny, pokryciem działki, medianą NDMI, uprawą i fazą oraz
+  interpretacją na tle progów dla tej fazy i zgodnością z bilansem. Gdy faza nie pozwala porównać (wschody, dojrzewanie,
+  poza sezonem) albo zdjęcie jest starsze niż 10 dni – „Brak podstaw do porównania”. NDMI pozostaje sygnałem pomocniczym.
 - **Zalecenia z terenu:** „Zatrzymaj wodę w obniżeniu / spowolnij wodę tam, gdzie spływ zbiera się w strugę” – wskazane miejsce
   z analizy NMT (zagłębienie lub koncentracja spływu) jest zaznaczone na mapie w zakładce „Zalecenia”, z pojemnością i ilością
-  wody, która odpływa; „Ogranicz spływ wody ze stoku” – przy nachyleniu ≥ 3° lub ≥ 20% działki powyżej 5° i spływie ≥ 3 mm/sezon.
+  wody, która odpływa; każde zalecenie retencyjne ma blok liczb, na których się opiera, i „Do zrobienia w terenie” (konkretna
+  czynność). Brak modelu terenu albo danych o ciekach jest pokazany w zakładce „Zalecenia”, w tabeli źródeł i na wydruku;
+  „Ogranicz spływ wody ze stoku” – przy nachyleniu ≥ 3° lub ≥ 20% działki powyżej 5° i spływie ≥ 3 mm/sezon.
 
 Zalecenia powstają z reguł opartych na wynikach (rów ≤ 100 m, lekka gleba lub mała retencja, bieżący stres, krytyczne miesiące
 w historii, spływ i miejsca z NMT, NDMI); każde podaje uzasadnienie z liczbami. Wyniki są buforowane (pamięć + `.cache/`); pierwsze liczenie trwa zwykle 5–30 s.

@@ -148,3 +148,38 @@ test('satelita w diagnozie: zielone, dobrze uwodnione rośliny łagodzą ocenę 
   assert.equal(confirmed.currentState.level, 'elevated');
   assert.match(confirmed.currentState.summary, /potwierdza/);
 });
+
+test('Sentinel-2 w głównej zakładce: data sceny, pokrycie, interpretacja dla uprawy i fazy; bez porównania – status no_comparison', () => {
+  const dry = (d: string): [number, number] => (d.slice(5, 7) >= '05' && d.slice(5, 7) <= '08' ? [0.5, 5] : [3, 1]);
+  const weather = weatherOf('2014-03-01', '2024-06-20', dry);
+  const req = { parcelId: parcel.id, cropId: 'pszenica_ozima' as const, analysisDate: '2024-06-20' };
+  const r = buildAssessment({ request: req, parcel, weather, soil, hydro: null, ndmi: ndmiOf(-0.05, '2024-06-18') });
+  assert.equal(r.satellite?.status, 'ok');
+  assert.equal(r.satellite?.sceneDate, '2024-06-18');
+  assert.equal(r.satellite?.coveragePct, 95);
+  assert.equal(r.satellite?.verdict, 'stress');
+  assert.match(r.satellite?.stageLabel ?? '', /pełnego rozwoju/);
+  assert.match(r.satellite?.agreement ?? '', /potwierdza/);
+  // Kukurydza w fazie początkowej – NDMI opisuje glebę: brak podstaw do porównania.
+  const early = buildAssessment({ request: { ...req, cropId: 'kukurydza_ziarno', analysisDate: '2024-05-10' }, parcel, weather, soil, hydro: null, ndmi: ndmiOf(-0.05, '2024-05-08') });
+  assert.equal(early.satellite?.status, 'no_comparison');
+  assert.equal(early.satellite?.verdict, null);
+  const none = buildAssessment({ request: req, parcel, weather, soil, hydro: null, ndmiError: 'x' });
+  assert.equal(none.satellite?.status, 'unavailable');
+});
+
+test('zalecenie retencyjne z terenu: miejsce na mapie, liczby i czynność w terenie; brak NMT jest widoczny w źródłach', () => {
+  const weather = weatherOf('2014-03-01', '2024-07-01', stormy);
+  const req = { parcelId: parcel.id, cropId: 'kukurydza_ziarno' as const, analysisDate: '2024-07-01' };
+  const r = buildAssessment({ request: req, parcel, weather, soil, hydro: null, terrain: terrainOf(4) });
+  const place = r.recommendations.find((x) => x.id === 'rec-miejsce');
+  assert.ok(place?.suggestedArea);
+  assert.ok(place.fieldTask && place.fieldTask.length > 20);
+  assert.ok(place.evidenceNumbers?.some((n) => n.label === 'Pojemność'));
+  assert.ok(place.evidenceNumbers?.some((n) => /spływ/i.test(n.label)));
+  const noTerrain = buildAssessment({ request: req, parcel, weather, soil, hydro: null, terrainError: 'GUGiK nie odpowiedział' });
+  const nmt = noTerrain.dataSources.find((s) => s.id === 'nmt');
+  assert.equal(nmt?.availability, 'missing');
+  assert.match(nmt?.limitations.join(' ') ?? '', /GUGiK nie odpowiedział/);
+  assert.equal(noTerrain.dataSources.find((s) => s.id === 'hydro')?.availability, 'missing');
+});

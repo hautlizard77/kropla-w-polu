@@ -3641,3 +3641,87 @@ details > summary:hover {
 .parcel-card__placeholder .progress {
   width: 85%;
 }
+
+/* Sentinel-2 w zakładce „Sytuacja wodna”. */
+.satellite-card {
+  margin-top: 1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--gray-400);
+  border-radius: var(--radius);
+  background: var(--white);
+}
+
+.satellite-card--ok {
+  border-left-color: var(--green-600);
+}
+
+.satellite-card--watch {
+  border-left-color: var(--risk-moderate);
+}
+
+.satellite-card--stress {
+  border-left-color: var(--risk-elevated);
+}
+
+.satellite-card h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1.05rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.satellite-card__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.5rem 1rem;
+  margin: 0 0 0.7rem;
+}
+
+.satellite-card__facts dt {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.satellite-card__facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.satellite-card__verdict {
+  margin: 0 0 0.4rem;
+}
+
+@media print {
+  .satellite-card {
+    break-inside: avoid;
+  }
+}
+
+.evidence-numbers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.35rem 1rem;
+  margin: 0.4rem 0 0.7rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--gray-25);
+  border-radius: var(--radius-small);
+}
+
+.evidence-numbers dt {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.evidence-numbers dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.field-task {
+  padding: 0.55rem 0.8rem;
+  border-left: 3px solid var(--green-600);
+  background: var(--green-50);
+}

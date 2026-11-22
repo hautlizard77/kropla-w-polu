@@ -13,6 +13,7 @@ import type {
   AnalysisRequest,
   AnalysisResult,
   AnalysisUnavailable,
+  SatelliteSummary,
   Assessment,
   DataSource,
   Indicator,
@@ -191,11 +192,28 @@ function Report({
   headingRef: RefObject<HTMLHeadingElement | null>;
 }) {
   const sourcesById = useMemo(() => new Map(result.dataSources.map((source) => [source.id, source])), [result]);
-  // Cieków, satelity i terenu bez danych nie pokazujemy w tabeli źródeł – brak opisuje treść oceny i ograniczenia.
-  const shownSources = useMemo(
-    () => result.dataSources.filter((source) => !(['hydro', 's2', 'nmt'].includes(source.id) && source.availability === 'missing')),
-    [result],
-  );
+  // Brak zdjęcia satelitarnego opisuje karta Sentinel-2 w „Sytuacji wodnej”; brak terenu i cieków pokazujemy w tabeli źródeł.
+  const shownSources = useMemo(() => result.dataSources.filter((source) => !(source.id === 's2' && source.availability === 'missing')), [result]);
+  const missingForRetention = useMemo(() => {
+    const out: { id: string; title: string; text: string }[] = [];
+    const nmt = result.dataSources.find((source) => source.kind === 'teren');
+    const hydro = result.dataSources.find((source) => source.kind === 'hydrologia');
+    if (!result.isDemo && nmt?.availability === 'missing') {
+      out.push({
+        id: 'nmt',
+        title: 'Brak modelu terenu.',
+        text: `${nmt.limitations[0] ?? ''} Miejsca do zatrzymania wody na działce nie zostały wskazane, a spływ policzono dla typowego nachylenia.`,
+      });
+    }
+    if (!result.isDemo && hydro?.availability === 'missing') {
+      out.push({
+        id: 'hydro',
+        title: 'Brak danych o ciekach i rowach.',
+        text: 'Usługi Wód Polskich i OpenStreetMap nie odpowiedziały – nie oceniono możliwości zatrzymania wody w pobliskim rowie lub cieku.',
+      });
+    }
+    return out;
+  }, [result]);
   const highlights = useMemo(
     () => result.recommendations.flatMap((rec) => (rec.suggestedArea ? [rec.suggestedArea] : [])),
     [result],
@@ -290,6 +308,7 @@ function Report({
               }
             />
           </div>
+          {result.satellite && <SatelliteCard satellite={result.satellite} />}
         </section>
       </TabPanel>
 
@@ -312,6 +331,15 @@ function Report({
               Ocena na wybrany dzień nie jest możliwa, dlatego zalecenia opierają się na historycznej podatności działki
               i dostępnych danych pogodowych.
             </p>
+          )}
+          {missingForRetention.length > 0 && (
+            <div className="status status--info" role="note">
+              {missingForRetention.map((m) => (
+                <p key={m.id}>
+                  <strong>{m.title}</strong> {m.text}
+                </p>
+              ))}
+            </div>
           )}
           {result.recommendations.length === 0 ? (
             <div className="status status--info">
@@ -447,6 +475,67 @@ function Report({
   );
 }
 
+const NDMI_VERDICT: Record<NonNullable<SatelliteSummary['verdict']>, string> = {
+  ok: 'Rośliny dobrze uwodnione',
+  watch: 'Uwodnienie słabsze niż w dobrych warunkach',
+  stress: 'Rośliny wyraźnie tracą wodę',
+};
+
+const ndmiNumber = (v: number) => v.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Sentinel-2 w głównej zakładce: data sceny, pokrycie i NDMI na tle oczekiwań dla uprawy i fazy – sygnał pomocniczy. */
+function SatelliteCard({ satellite }: { satellite: SatelliteSummary }) {
+  const comparable = satellite.status === 'ok';
+  return (
+    <div className={`satellite-card${comparable && satellite.verdict ? ` satellite-card--${satellite.verdict}` : ''}`}>
+      <h3>
+        Obserwacja satelitarna (Sentinel-2) <span className="tag">dowód pośredni</span>
+      </h3>
+      <dl className="satellite-card__facts">
+        <div>
+          <dt>Data sceny</dt>
+          <dd>{satellite.sceneDate ? formatDatePl(satellite.sceneDate) : 'brak bezchmurnej sceny'}</dd>
+        </div>
+        <div>
+          <dt>Pokrycie działki</dt>
+          <dd>{satellite.coveragePct !== null ? `${satellite.coveragePct}%` : '—'}</dd>
+        </div>
+        <div>
+          <dt>NDMI (mediana)</dt>
+          <dd>{satellite.ndmiMedian !== null ? ndmiNumber(satellite.ndmiMedian) : '—'}</dd>
+        </div>
+        <div>
+          <dt>Uprawa i faza</dt>
+          <dd>
+            {satellite.cropName}, {satellite.stageLabel}
+          </dd>
+        </div>
+      </dl>
+      {comparable && satellite.verdict ? (
+        <>
+          <p className="satellite-card__verdict">
+            <strong>{NDMI_VERDICT[satellite.verdict]}</strong>
+            {satellite.expected && (
+              <span className="muted">
+                {' '}
+                · w tej fazie dobre uwodnienie od {ndmiNumber(satellite.expected.okFrom)}, wyraźny niedobór poniżej {ndmiNumber(satellite.expected.stressBelow)}
+              </span>
+            )}
+          </p>
+          {satellite.agreement && <p>{satellite.agreement}</p>}
+        </>
+      ) : (
+        <p className="satellite-card__verdict">
+          <strong>Brak podstaw do porównania.</strong> <span className="muted">{satellite.text}</span>
+        </p>
+      )}
+      <p className="small muted">
+        NDMI mierzy wodę w liściach, nie w glebie – to sygnał pomocniczy. Ocenę wyznacza bilans wody; satelita może ją przesunąć najwyżej o jeden stopień.
+      </p>
+    </div>
+  );
+}
+
 function AssessmentCard({
   title,
   subtitle,
@@ -547,6 +636,21 @@ function RecommendationGroup({
             <p>
               <strong>Dlaczego:</strong> {rec.rationale}
             </p>
+            {rec.evidenceNumbers && rec.evidenceNumbers.length > 0 && (
+              <dl className="evidence-numbers">
+                {rec.evidenceNumbers.map((item) => (
+                  <div key={item.label}>
+                    <dt>{item.label}</dt>
+                    <dd>{item.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+            {rec.fieldTask && (
+              <p className="field-task">
+                <strong>Do zrobienia w terenie:</strong> {rec.fieldTask}
+              </p>
+            )}
             {rec.evidenceSourceIds.length > 0 && (
               <p className="small muted">
                 Na podstawie:{' '}
@@ -571,7 +675,7 @@ function RecommendationGroup({
             )}
             {rec.suggestedArea && (
               <p className="small">
-                <span className="legend legend--area">Na mapie: {rec.suggestedArea.label}</span>
+                <span className="legend legend--area">Miejsce zaznaczone na mapie obok: {rec.suggestedArea.label}</span>
               </p>
             )}
           </li>

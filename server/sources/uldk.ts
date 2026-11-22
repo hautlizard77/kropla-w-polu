@@ -44,15 +44,52 @@ export async function lookupParcel(parcelId: string): Promise<ParcelLookup> {
   const demo = demoParcel(parcelId);
   if (demo) return { status: 'ok', parcel: demo };
 
-  const cached = await cacheGet<ParcelLookup>('uldk', `${CACHE_VERSION}:${parcelId}`);
-  if (cached?.status === 'ok') {
-    return { status: 'ok', parcel: { ...cached.parcel, source: { ...cached.parcel.source, durationMs: null } } };
+  const key = `${CACHE_VERSION}:${parcelId}`;
+  const cached = await cacheGet<ParcelLookup & { verifiedAt?: string }>('uldk', key);
+  const cachedValid = cached?.status === 'ok' && isPlausibleParcel(cached.parcel) ? cached : null;
+  const verifiedAt = cachedValid?.verifiedAt ?? (cachedValid?.status === 'ok' ? cachedValid.parcel.source.retrievedAt : null) ?? null;
+  const fresh = verifiedAt !== null && Date.now() - Date.parse(verifiedAt) < CACHE_FRESH_MS;
+  if (cachedValid?.status === 'ok' && fresh) {
+    return { status: 'ok', parcel: { ...cachedValid.parcel, source: { ...cachedValid.parcel.source, durationMs: null } } };
   }
   return once(`uldk:${parcelId}`, async () => {
     const result = await fetchFromUldk(parcelId);
-    if (result.status === 'ok') await cacheSet('uldk', `${CACHE_VERSION}:${parcelId}`, result);
+    if (result.status === 'ok' && isPlausibleParcel(result.parcel)) {
+      await cacheSet('uldk', key, { ...result, verifiedAt: new Date().toISOString() });
+      return result;
+    }
+    if (result.status === 'ok') {
+      return { status: 'error', message: 'Usługa ULDK zwróciła granicę, która nie wygląda na działkę w Polsce – spróbuj ponownie za chwilę.' } satisfies ParcelLookup;
+    }
+    // Awaria usługi: wcześniej zweryfikowana granica z bufora jest lepsza niż brak analizy (granice zmieniają się rzadko).
+    if (result.status === 'error' && cachedValid?.status === 'ok') {
+      const when = verifiedAt ? new Date(verifiedAt).toLocaleDateString('pl-PL') : 'wcześniej';
+      return {
+        status: 'ok',
+        parcel: {
+          ...cachedValid.parcel,
+          source: {
+            ...cachedValid.parcel.source,
+            durationMs: null,
+            notes: [...cachedValid.parcel.source.notes, `ULDK jest teraz niedostępne – użyto granicy pobranej i sprawdzonej ${when} (zapis w buforze).`],
+          },
+        },
+      };
+    }
     return result;
   });
+}
+
+/** Po 30 dniach granicę z bufora sprawdzamy ponownie w ULDK (ale przy awarii usługi nadal jej używamy). */
+const CACHE_FRESH_MS = 30 * 24 * 3600 * 1000;
+
+/** Czy granica wygląda na działkę w Polsce: co najmniej 3 punkty w zasięgu EPSG:2180 i dodatnia powierzchnia do 10 000 ha. */
+export function isPlausibleParcel(parcel: ParcelInfo): boolean {
+  const ring = parcel.ring2180;
+  if (!Array.isArray(ring) || ring.length < 3) return false;
+  if (!ring.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y) && x > 100000 && x < 900000 && y > 100000 && y < 900000)) return false;
+  const area = polygonArea(ring);
+  return area > 1 && area < 1e8;
 }
 
 const RESULT_FIELDS = 'id,geom_wkt,voivodeship,county,commune,region';
@@ -187,33 +224,90 @@ function throttled<T>(run: () => Promise<T>): Promise<T> {
 const recentFailures = new Map<string, { at: number; result: ParcelLookup }>();
 const FAILURE_TTL_MS = 30_000;
 
+/** Najwięcej, ile czekamy na ULDK łącznie (z ponowieniami i Retry-After) – ocena ma się zmieścić w ok. 30 s. */
+const TOTAL_BUDGET_MS = 25_000;
+/** Odpowiedź z granicą działki ma kilka–kilkadziesiąt kB; większa to nie jest odpowiedź ULDK. */
+export const MAX_RESPONSE_BYTES = 2_000_000;
+
+export type UldkAttempt =
+  | { kind: 'text'; text: string }
+  | { kind: 'retry_after'; waitMs: number; status: number }
+  | { kind: 'fail'; reason: string; retryable: boolean };
+
+/** Czas z nagłówka Retry-After (sekundy albo data HTTP); null, gdy nagłówka brak lub jest nieczytelny. */
+export function retryAfterMs(header: string | null, now = Date.now()): number | null {
+  if (!header) return null;
+  const value = header.trim();
+  if (/^\d+$/.test(value)) return Number(value) * 1000;
+  const at = Date.parse(value);
+  return Number.isFinite(at) ? Math.max(0, at - now) : null;
+}
+
+/** Sprawdza status, typ i rozmiar odpowiedzi, zanim odczytamy treść. */
+export async function readUldkResponse(response: Response, now = Date.now()): Promise<UldkAttempt> {
+  if (response.status === 429 || response.status === 503) {
+    const wait = retryAfterMs(response.headers.get('retry-after'), now);
+    return wait !== null ? { kind: 'retry_after', waitMs: wait, status: response.status } : { kind: 'fail', reason: `HTTP ${response.status}`, retryable: true };
+  }
+  if (!response.ok) return { kind: 'fail', reason: `HTTP ${response.status}`, retryable: response.status >= 500 };
+  const type = (response.headers.get('content-type') ?? '').toLowerCase();
+  if (type && !type.startsWith('text/plain') && !type.startsWith('application/octet-stream')) {
+    // Np. strona HTML z komunikatem o blokadzie albo błędzie bramy.
+    return { kind: 'fail', reason: `nieoczekiwany typ odpowiedzi (${type.split(';')[0]})`, retryable: true };
+  }
+  const declared = Number(response.headers.get('content-length') ?? NaN);
+  if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) return { kind: 'fail', reason: `odpowiedź za duża (${declared} B)`, retryable: false };
+  const text = await response.text();
+  if (text.length > MAX_RESPONSE_BYTES) return { kind: 'fail', reason: `odpowiedź za duża (${text.length} B)`, retryable: false };
+  if (/^\s*<(!doctype|html)/i.test(text)) return { kind: 'fail', reason: 'odpowiedź HTML zamiast danych', retryable: true };
+  return { kind: 'text', text };
+}
+
 async function fetchFromUldk(parcelId: string): Promise<ParcelLookup> {
   const recent = recentFailures.get(parcelId);
   if (recent && Date.now() - recent.at < FAILURE_TTL_MS) return recent.result;
   const url = `${ULDK_URL}?request=GetParcelById&id=${encodeURIComponent(parcelId)}&result=${RESULT_FIELDS}&srid=2180`;
   const started = Date.now();
+  const deadline = started + TOTAL_BUDGET_MS;
   let parsed: UldkParse = { kind: 'no_geometry' };
   let raw = '';
+  let lastProblem = '';
+  let throttledByService = false;
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
-    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt - 1]));
-    raw = await throttled(async () => {
+    const outcome = await throttled(async (): Promise<UldkAttempt> => {
       try {
         // Nagłówki jak w przeglądarce – na takie zapytania ULDK odpowiada najstabilniej.
         const response = await fetch(url, {
           headers: {
-            Accept: '*/*',
+            Accept: 'text/plain,*/*;q=0.5',
             'Accept-Language': 'pl-PL,pl;q=0.9,en;q=0.8',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36',
           },
-          signal: AbortSignal.timeout(20000),
+          signal: AbortSignal.timeout(Math.max(1000, Math.min(20000, deadline - Date.now()))),
         });
-        return response.ok ? await response.text() : `HTTP ${response.status}`;
+        return await readUldkResponse(response);
       } catch (error) {
-        return `błąd połączenia: ${errorText(error)}`;
+        return { kind: 'fail', reason: `błąd połączenia: ${errorText(error)}`, retryable: true };
       }
     });
-    parsed = parseUldkResponse(raw);
-    if (parsed.kind !== 'no_geometry') break;
+    let waitMs = RETRY_DELAYS_MS[attempt] ?? 0;
+    if (outcome.kind === 'text') {
+      raw = outcome.text;
+      parsed = parseUldkResponse(raw);
+      if (parsed.kind !== 'no_geometry') break;
+      lastProblem = 'odpowiedź bez geometrii';
+    } else if (outcome.kind === 'retry_after') {
+      throttledByService = true;
+      lastProblem = `HTTP ${outcome.status}, Retry-After ${Math.round(outcome.waitMs / 1000)} s`;
+      waitMs = Math.max(waitMs, outcome.waitMs);
+    } else {
+      lastProblem = outcome.reason;
+      if (outcome.reason.startsWith('HTTP 429')) throttledByService = true;
+      if (!outcome.retryable) break;
+    }
+    // Czekamy tylko, jeśli kolejna próba zmieści się w limicie czasu.
+    if (attempt === RETRY_DELAYS_MS.length || Date.now() + waitMs + 1000 > deadline) break;
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
   const durationMs = Date.now() - started;
   if (parsed.kind === 'not_found') {
@@ -221,11 +315,12 @@ async function fetchFromUldk(parcelId: string): Promise<ParcelLookup> {
   }
   if (parsed.kind === 'no_geometry') {
     const snippet = raw.replace(/\s+/g, ' ').slice(0, 120);
-    console.warn(`[ULDK] ${parcelId}: brak geometrii po ${RETRY_DELAYS_MS.length + 1} próbach. Odpowiedź: ${snippet}`);
+    console.warn(`[ULDK] ${parcelId}: brak granicy po ${Math.round(durationMs / 1000)} s (${lastProblem}). Odpowiedź: ${snippet}`);
     const result: ParcelLookup = {
       status: 'error',
-      message:
-        'Usługa ULDK (GUGiK) chwilowo nie podaje granicy tej działki – zwykle po serii zapytań blokuje je na ok. pół minuty. Spróbuj ponownie za chwilę.',
+      message: throttledByService
+        ? 'Ewidencja gruntów (ULDK, GUGiK) chwilowo ogranicza liczbę zapytań. Granica działki nie została pobrana – spróbuj ponownie za ok. minutę.'
+        : 'Ewidencja gruntów (ULDK, GUGiK) jest chwilowo niedostępna albo odpowiada z błędem. Granica działki nie została pobrana – spróbuj ponownie za kilka minut.',
     };
     recentFailures.set(parcelId, { at: Date.now(), result });
     return result;

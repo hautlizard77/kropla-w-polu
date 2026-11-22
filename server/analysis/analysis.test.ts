@@ -271,3 +271,21 @@ test('bilans prognozy: analiza historyczna – nie dotyczy; poza sezonem – zat
   assert.deepEqual(off.forecast!.steps.map((s) => s.id), ['poza-sezonem', 'mroz']);
   assert.equal(off.forecast!.irrigationPlan!.events.length, 0);
 });
+
+test('luka w pogodzie (brak 1 kwietnia) blokuje diagnozę na 30 czerwca: „Za mało danych”, ostatnia wiarygodna data, bez zaleceń', () => {
+  const weather = syntheticWeather('2014-03-01', '2024-06-30', (d) => (d.slice(5, 7) >= '05' && d.slice(5, 7) <= '08' ? [1, 5] : [3, 1]));
+  for (const day of weather.days) if (day.date === '2024-04-01') day.precipitationMm = null as unknown as number;
+  const result = buildAssessment({
+    request: { parcelId: parcel.id, cropId: 'pszenica_ozima', analysisDate: '2024-06-30' },
+    parcel,
+    weather,
+    soil: soil(0.14, 0.05, 'lekka'),
+    hydro: null,
+    now: new Date('2026-11-21T12:00:00Z'),
+  });
+  assert.equal(result.currentState.level, 'insufficient_data');
+  assert.match(result.currentState.summary, /1 kwietnia 2024/);
+  assert.match(result.currentState.summary, /Ostatni dzień z wiarygodnym bilansem: 31 marca 2024/);
+  assert.equal(result.recommendations.length, 0);
+  assert.equal(result.irrigation?.status, 'not_calculated');
+});

@@ -132,7 +132,11 @@ for (const c of CASES) {
   const r = outcome.result;
   const s = r.satellite;
   const balanceLevel = r.currentState.level;
-  const reserve = r.currentState.indicators.find((i) => i.id === 'zapas')?.value ?? null;
+  // Wskaźnik „zapas” jest w mm (wartość) z pełnym zapasem TAW w odniesieniu – procent liczymy z obu.
+  const zapas = r.currentState.indicators.find((i) => i.id === 'zapas');
+  const reserveMm = typeof zapas?.value === 'number' ? zapas.value : null;
+  const tawMm = typeof zapas?.reference?.value === 'number' ? zapas.reference.value : null;
+  const reserve = reserveMm !== null && tawMm ? `zapas ${reserveMm} mm z ${tawMm} mm, ${Math.round((100 * reserveMm) / tawMm)}%` : null;
   const pl2 = (v: number | null | undefined) => (v ?? 0).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const ndmiText = !s ? '—' : s.verdict ? `NDMI ${pl2(s.ndmiMedian)} (scena ${formatDatePl(s.sceneDate!)}, pokrycie ${s.coveragePct}%) – ${VERDICT[s.verdict]}` : `brak podstaw do porównania – ${REASON[s.reason ?? 'unavailable']}${s.coveragePct !== null ? ` (najlepsze pokrycie ${s.coveragePct}%)` : ''}${s.sceneDate ? ` (scena ${formatDatePl(s.sceneDate)}, NDMI ${pl2(s.ndmiMedian)})` : ''}`;
   // Kontekst IUNG: zgodny kierunek = bilans „niskie” przy braku zagrożenia w gminie albo „umiarkowane/podwyższone” przy zagrożeniu.
@@ -147,7 +151,7 @@ for (const c of CASES) {
     dateText: formatDatePl(c.date),
     cropNote: c.cropNote,
     date: c.date,
-    balance: `${LEVEL[balanceLevel]}${reserve !== null ? ` (zapas ${reserve}%)` : ''}`,
+    balance: `${LEVEL[balanceLevel]}${reserve !== null ? ` (${reserve})` : ''}`,
     balanceLevel,
     ndmi: ndmiText,
     comparison: s?.comparison ?? null,

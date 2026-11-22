@@ -43,3 +43,14 @@ test('dane rzeczywiste: rozbieżność bilansu i NDMI nie zmienia klasy; jest da
     globalThis.fetch = realFetch;
   }
 });
+
+test('tabela walidacji: zapas w mm i procent pełnego zapasu są spójne (bez mylenia jednostek)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const rows = JSON.parse(readFileSync(join(import.meta.dirname, '..', '..', 'validation', 'results.json'), 'utf8')) as { balance: string }[];
+  assert.ok(rows.length >= 3);
+  for (const row of rows) {
+    const m = /zapas (\d+) mm z (\d+) mm, (\d+)%/.exec(row.balance);
+    assert.ok(m, `brak zapasu w mm i % w: ${row.balance}`);
+    assert.equal(Number(m[3]), Math.round((100 * Number(m[1])) / Number(m[2])), row.balance);
+  }
+});

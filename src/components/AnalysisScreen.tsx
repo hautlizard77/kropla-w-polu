@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type React
 import { cropLabel } from '../data/crops';
 import { CropPicker } from './CropPicker';
 import { DEMO_PARCELS } from '../data/demoScenarios';
+import { JURY_PARCELS } from '../data/juryParcels';
 import { earliestAnalysisDate, formatDatePl, todayInPoland } from '../lib/dates';
 import { normalizeParcelId, validateForm, type FieldErrors, type FormValues } from '../lib/validation';
 import { AnalysisError, analyzeParcel } from '../services/analysis';
@@ -11,12 +12,6 @@ import { PageHeader } from './AppShell';
 import { Steps } from './Layout';
 import { ParcelMap, type MapParcel } from './ParcelMap';
 import { ANALYSIS_STEPS, LoadingProgress } from './LoadingProgress';
-
-const JURY_EXAMPLE: FormValues = {
-  parcelId: '142504_2.0018.127',
-  cropId: 'pszenica_ozima',
-  analysisDate: '2019-06-25',
-};
 
 interface Props {
   values: FormValues;
@@ -52,6 +47,7 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
     analysisDate: useRef<HTMLInputElement>(null),
   };
   const ids = { parcelId: useId(), cropId: useId(), analysisDate: useId() };
+  const juryParcelId = useId();
   const today = todayInPoland();
   const earliest = earliestAnalysisDate(today);
 
@@ -59,6 +55,11 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
 
   const normalizedParcelId = normalizeParcelId(values.parcelId);
   const selectedDemo = DEMO_PARCELS.find(({ parcel }) => parcel.id === normalizedParcelId)?.scenario ?? null;
+  const selectedJuryParcel = JURY_PARCELS.find(({ request }) =>
+    request.parcelId === normalizedParcelId &&
+    request.cropId === values.cropId &&
+    request.analysisDate === values.analysisDate,
+  );
 
   function update(field: keyof FormValues, value: string) {
     onValuesChange({ ...values, [field]: value });
@@ -135,6 +136,24 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
         <section className="card form-card" aria-labelledby="tytul-formularza">
           <h2 id="tytul-formularza">Dane do analizy</h2>
           <form onSubmit={handleSubmit} noValidate aria-busy={isLoading}>
+            <div className="field">
+              <label htmlFor={juryParcelId}>Przykłady dla jury</label>
+              <select
+                id={juryParcelId}
+                value={selectedJuryParcel?.request.parcelId ?? ''}
+                disabled={isLoading}
+                onChange={(event) => {
+                  const example = JURY_PARCELS.find(({ request }) => request.parcelId === event.target.value);
+                  if (example) applyInputs(example.request);
+                }}
+              >
+                <option value="" disabled>Wybierz działkę przykładową</option>
+                {JURY_PARCELS.map(({ name, voivodeship, request }) => (
+                  <option key={request.parcelId} value={request.parcelId}>{name} ({voivodeship})</option>
+                ))}
+              </select>
+            </div>
+
             <Field
               id={ids.parcelId}
               label="Identyfikator działki ewidencyjnej"
@@ -149,7 +168,7 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
                 inputMode="text"
                 autoComplete="off"
                 spellCheck={false}
-                placeholder={`np. ${JURY_EXAMPLE.parcelId}`}
+                placeholder={`np. ${JURY_PARCELS[0].request.parcelId}`}
                 value={values.parcelId}
                 onChange={(event) => update('parcelId', event.target.value)}
                 aria-invalid={fieldMessage('parcelId') ? true : undefined}
@@ -204,14 +223,6 @@ export function AnalysisScreen({ values, onValuesChange, onResult, simulateError
             <div className="form-actions">
               <button type="submit" className="btn btn--primary" disabled={isLoading}>
                 {isLoading ? 'Sprawdzam…' : 'Sprawdź sytuację wodną'}
-              </button>
-              <button
-                type="button"
-                className="btn btn--secondary"
-                disabled={isLoading}
-                onClick={() => applyInputs(JURY_EXAMPLE)}
-              >
-                Wczytaj działkę z raportu jury
               </button>
             </div>
 

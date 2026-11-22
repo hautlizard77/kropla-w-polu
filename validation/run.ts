@@ -11,14 +11,15 @@
  */
 import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
+import { JURY_PARCELS } from '../src/data/juryParcels';
 
 const root = join(import.meta.dirname, '..');
 const work = mkdtempSync(join(tmpdir(), 'kropla-walidacja-'));
 cpSync(join(root, 'validation', 'cache'), work, { recursive: true });
 process.env.KROPLA_CACHE_DIR = work;
 
-const mphp = JSON.parse(readFileSync(join(root, 'validation', 'mphp.json'), 'utf8')) as Record<string, string[][][]>;
+const mphp = JSON.parse(readFileSync(join(root, 'validation', 'mphp.json'), 'utf8')) as Partial<Record<string, string[][][]>>;
 const RINGS = [50, 100, 300];
 
 const { analysis } = await import('../server/api');
@@ -34,15 +35,15 @@ globalThis.fetch = (async (input: string | URL | Request) => {
   if (url.host === 'wody.isok.gov.pl') {
     const bbox = (url.searchParams.get('BBOX') ?? '').split(',').map(Number);
     for (const [id, b] of bounds) {
-      const ring = RINGS.findIndex((r) => Math.abs(b[0]! - r - bbox[0]!) <= 1 && Math.abs(b[3]! + r - bbox[3]!) <= 1);
-      if (ring >= 0) {
-        const features = (mphp[id]?.[ring] ?? []).map(([n, c, t, w, cid], i) => ({
+      const ring = RINGS.findIndex((r) => b.every((value, i) => value + (i < 2 ? -r : r) === bbox[i]));
+      const saved = mphp[id]?.[ring];
+      if (saved) {
+        const features = saved.map(([n, c, t, w, cid], i) => ({
           properties: { Nazwarzeki: n, Charakterodcinkacieku: c, Typodcinkacieku: t, Szerokośćodcinkaciekum: w, Identyfikatorhydrograficznycieku: cid, ObjectID: String(i) },
         }));
         return new Response(JSON.stringify({ type: 'FeatureCollection', features }), { headers: { 'content-type': 'application/json' } });
       }
     }
-    return new Response(JSON.stringify({ features: [] }), { headers: { 'content-type': 'application/json' } });
   }
   throw new Error('nie odpytywano – odtworzenie z zapisanych danych');
 }) as typeof fetch;
@@ -54,58 +55,29 @@ interface Iung {
   url: string;
 }
 
-interface Case {
-  parcelId: string;
-  gmina: string;
-  cropId: string;
-  date: string;
-  /** Skąd wiadomo, co rośnie: tu założenie – brak danych o faktycznej uprawie. */
-  cropNote: string;
-  iung: Iung | null;
-}
+const IUNG_BY_PARCEL: Partial<Record<string, Iung>> = {
+  '220907_4.0007.1/1': {
+    period: '21 IV–20 VI 2024 (okres 4)', status: 'zagrożenie suszą (zboża ozime, kat. gleby I–II)',
+    sharePct: 3.35, url: 'https://susza.iung.pulawy.pl/wykazy/2024,2209073/',
+  },
+  '022305_2.0012.16': {
+    period: '1 V–30 VI 2024 (okres 5)', status: 'zagrożenie suszą (zboża ozime, kat. gleby I–II)',
+    sharePct: 2.01, url: 'https://susza.iung.pulawy.pl/wykazy/2024,0223052/',
+  },
+  '060408_2.0167.696/1': {
+    period: '21 IV–20 VI 2024 (okres 4)', status: 'zagrożenie suszą (zboża ozime, kat. gleby I)',
+    sharePct: 0.37, url: 'https://susza.iung.pulawy.pl/wykazy/2024,0604082/',
+  },
+};
 
-const CASES: Case[] = [
-  {
-    parcelId: '142504_2.0018.127',
-    gmina: 'Jastrzębia (pow. radomski)',
-    cropId: 'pszenica_ozima',
-    date: '2019-06-25',
-    cropNote: 'uprawa przyjęta',
-    iung: null,
-  },
-  {
-    parcelId: '142508_2.0005.34',
-    gmina: 'Pionki – gm. wiejska (pow. radomski)',
-    cropId: 'pszenica_ozima',
-    date: '2020-06-15',
-    cropNote: 'uprawa przyjęta',
-    iung: { period: '11 IV–10 VI 2020 (okres 3)', status: 'brak zagrożenia suszą (zboża ozime, kat. gleby I–IV)', sharePct: 0, url: 'https://susza.iung.pulawy.pl/wykazy/2020,1425082/' },
-  },
-  {
-    parcelId: '142504_2.0018.65/1',
-    gmina: 'Jastrzębia (pow. radomski)',
-    cropId: 'ziemniaki',
-    date: '2022-07-20',
-    cropNote: 'uprawa przyjęta',
-    iung: { period: '21 V–20 VII 2022 (okres 7)', status: 'brak zagrożenia suszą (ziemniak, kat. gleby I–IV)', sharePct: 0, url: 'https://susza.iung.pulawy.pl/wykazy/2022,1425042/' },
-  },
-  {
-    parcelId: '142504_2.0017.120',
-    gmina: 'Jastrzębia (pow. radomski)',
-    cropId: 'kukurydza_ziarno',
-    date: '2023-07-10',
-    cropNote: 'uprawa przyjęta',
-    iung: { period: '11 V–10 VII 2023 (okres 6)', status: 'zagrożenie suszą na glebach kat. I (kukurydza na ziarno)', sharePct: 32.58, url: 'https://susza.iung.pulawy.pl/wykazy/2023,1425042/' },
-  },
-  {
-    parcelId: '142508_2.0010.39/2',
-    gmina: 'Pionki – gm. wiejska (pow. radomski)',
-    cropId: 'kukurydza_ziarno',
-    date: '2024-08-05',
-    cropNote: 'uprawa przyjęta',
-    iung: { period: '1 VI–31 VII 2024 (okres 8)', status: 'brak zagrożenia (zagrożenie było w okresach 5–6: 20,3% i 6,9% pow.)', sharePct: 0, url: 'https://susza.iung.pulawy.pl/wykazy/2024,1425082/' },
-  },
-];
+const CASES = JURY_PARCELS.map(({ commune, voivodeship, request }) => ({
+  parcelId: request.parcelId,
+  gmina: `${commune}, woj. ${voivodeship}`,
+  cropId: request.cropId,
+  date: request.analysisDate,
+  cropNote: 'uprawa przyjęta',
+  iung: IUNG_BY_PARCEL[request.parcelId],
+}));
 
 /** Przypadek do raportu PDF dla jury: grunt orny wg WorldCover, bilans i NDMI porównywalne, miejsce retencji z NMT. */
 const PDF_CASE = '142504_2.0018.127';
@@ -176,7 +148,9 @@ if (forPdf && 'result' in forPdf) writeFileSync(join(root, 'validation', 'pdf-ca
 const md = [
   '# Walidacja na rzeczywistych działkach',
   '',
-  'Wygenerowano: `npx tsx validation/run.ts` (offline, z danych w `validation/cache/` pobranych 22.11.2026 z usług: ULDK, Open-Meteo/NASA POWER, SoilGrids, GUGiK NMT, Sentinel-2 L2A, ESA WorldCover; cieki – MPHP10 Wód Polskich).',
+  'Cztery działki dla jury z czterech województw. W aplikacji otwórz listę „Przykłady dla jury”, wybierz działkę i kliknij „Sprawdź sytuację wodną”.',
+  '',
+  'Wygenerowano: `npx tsx validation/run.ts` (offline, z danych w `validation/cache/` pobranych 22.11.2026 z usług: ULDK, Open-Meteo/NASA POWER, SoilGrids, GUGiK NMT, Sentinel-2 L2A, ESA WorldCover; dostępne odpowiedzi o ciekach – MPHP10 Wód Polskich).',
   '',
   '**Status: żaden przypadek nie jest zwalidowany.** Dla tych działek nie ma niezależnego pomiaru (wilgotność gleby w polu, plon, obserwacja rolnika). Dane IUNG (SMSR) opisują gminę i kategorię gleby, a nie działkę – są kontekstem regionalnym, nie punktem odniesienia. Uprawy są przyjęte, bo nie znamy faktycznych zasiewów; pokrycie terenu z ESA WorldCover 2021 (odczyt 22.11.2026) pokazuje, czy działka w ogóle jest polem.',
   '',
@@ -201,9 +175,6 @@ function summary(): string[] {
   type Row = { balanceLevel: string; comparison: string | null; conclusion: string; ndmiDrier: boolean | null; soil: string; landVerdict: string };
   const ok = rows.filter((row) => !('error' in row)) as Row[];
   const arable = ok.filter((row) => row.landVerdict === 'arable');
-  const notField = ok.filter((row) => row.landVerdict !== 'arable');
-  const diverge = ok.filter((row) => row.comparison === 'diverge');
-  const divergeNotField = diverge.filter((row) => row.landVerdict !== 'arable').length;
   const arableComparable = arable.filter((row) => row.comparison !== null);
   const arablePartialOrAgree = arableComparable.filter((row) => row.comparison !== 'diverge').length;
   const iungMismatch = ok.filter((row) => row.conclusion.includes('różny od kontekstu')).length;
@@ -212,11 +183,12 @@ function summary(): string[] {
   return [
     '## Wnioski',
     '',
-    `- **Pokrycie terenu wyjaśnia rozbieżności.** Według ESA WorldCover (2021) tylko ${arable.length} z ${ok.length} działek to grunty orne; pozostałe ${notField.length} to łąka albo las – przyjęta uprawa się nie zgadzała. Duże rozbieżności bilansu z NDMI (${divergeNotField} z ${diverge.length}) wystąpiły właśnie tam: NDMI opisywał łąkę lub las, a bilans – kukurydzę lub ziemniaki. Od teraz raport ostrzega o tym wprost.`,
-    `- **Na gruntach ornych bilans i NDMI są spójne:** w ${arablePartialOrAgree} z ${arableComparable.length} porównywalnych przypadków różnica wynosi najwyżej jeden stopień (w granicach dokładności obu metod), przy czym bilans jest ostrzejszy.`,
-    `- Kierunek bilansu różni się od kontekstu IUNG w ${iungMismatch} z ${iungKnown} przypadków z danymi IUNG – zawsze w stronę większego niedoboru w bilansie. ${light} z ${ok.length} działek leży według SoilGrids na glebach lekkich; prawdopodobne przyczyny: zapas wody z mapy 250 m mniejszy niż na działce, brak podsiąku wód gruntowych i głębszego ukorzenienia w modelu.`,
+    `- ESA WorldCover (2021) klasyfikuje ${arable.length} z ${ok.length} działek jako grunt orny.`,
+    `- Na gruntach ornych dało się porównać bilans z Sentinel-2 w ${arableComparable.length} z ${arable.length} przypadków. W ${arablePartialOrAgree} z ${arableComparable.length} porównań oceny różnią się najwyżej o jeden stopień.`,
+    `- Kierunek bilansu różni się od kontekstu IUNG w ${iungMismatch} z ${iungKnown} przypadków z danymi IUNG. SoilGrids wskazuje glebę lekką na ${light} z ${ok.length} działek.`,
     '- Konsekwencja w kodzie: klasę wyznacza bilans; NDMI i pokrycie terenu są osobnymi sygnałami z poleceniem sprawdzenia w terenie. Do kalibracji potrzebne są pomiary wilgotności gleby na działkach i znajomość faktycznej uprawy.',
   ];
 }
-writeFileSync(join(root, 'validation', 'used-files.txt'), [...(await import('../server/cache')).cacheReads].map((f) => f.slice(work.length + 1)).sort().join('\n'));
+writeFileSync(join(root, 'validation', 'used-files.txt'), [...(await import('../server/cache')).cacheReads].map((f) => relative(work, f).split(sep).join('/')).sort().join('\n'));
 console.log(rows.map((row) => ('error' in row ? `${row.parcelId}: BŁĄD ${row.error}` : `${row.parcelId} ${row.date}: ${row.balance} | ${row.ndmi} | ${row.sources}`)).join('\n'));
+if (rows.some((row) => 'error' in row || row.balanceLevel === 'insufficient_data')) process.exitCode = 1;

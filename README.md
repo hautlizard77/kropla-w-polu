@@ -27,6 +27,9 @@ npm install
 npm run dev        # strona + API w jednym procesie, domyślnie http://localhost:5173
 ```
 
+W formularzu **Przykłady dla jury** wczytują numer działki, przyjętą uprawę i datę. Wybierz działkę i kliknij
+**Sprawdź sytuację wodną**. Pełna lista i zapisane dane są opisane w [zestawieniu czterech działek](docs/walidacja.md).
+
 Pozostałe komendy:
 
 ```bash
@@ -395,14 +398,11 @@ Aplikacja nie korzysta z modeli AI w czasie działania – wszystkie wyniki licz
   brak zdjęć), miejsce retencji z NMT i uzasadnienie liczbowe (`server/analysis/realData.test.ts`, `observations.test.ts`).
   Dane syntetyczne służą wyłącznie do testów działania.
 
-**Walidacja na rzeczywistych działkach** – [`docs/walidacja.md`](docs/walidacja.md): 5 działek z gmin Jastrzębia i Pionki
-(pow. radomski), 5 różnych dat z lat 2019–2024. Dla każdej: uprawa, pokrycie terenu (ESA WorldCover), wynik bilansu, wynik NDMI, kontekst regionalny IUNG
-(System Monitoringu Suszy Rolniczej, tabele dla gmin – dane dla gminy i kategorii gleby, nie dla działki) i wniosek.
-Żaden przypadek nie jest zwalidowany – brak niezależnego pomiaru na działkach; uprawy są przyjęte. Odtworzenie offline:
-`npx tsx validation/run.ts` (dane wejściowe pobrane 22.11.2026: ULDK, NASA POWER, SoilGrids, NMT GUGiK, Sentinel-2,
-MPHP10, ESA WorldCover). Wnioski: (1) obie duże rozbieżności bilansu z NDMI wystąpiły na działkach, które według mapy
-pokrycia terenu są łąką albo lasem, a nie polem przyjętej uprawy – raport ostrzega o tym teraz wprost; (2) na gruntach ornych
-bilans i NDMI różnią się najwyżej o jeden stopień; (3) na lekkich glebach bilans wskazuje niedobór częściej niż IUNG.
+**Próby na rzeczywistych działkach** – [`docs/walidacja.md`](docs/walidacja.md): cztery grunty orne w województwach
+mazowieckim, pomorskim, dolnośląskim i lubelskim. Dla każdej działki zestawiono bilans wody, pokrycie terenu,
+obserwację Sentinel-2 i dostępny kontekst gminny IUNG. We wszystkich próbach przyjęto pszenicę ozimą. Potwierdzenie
+trafności wyników wymaga niezależnych pomiarów na działce. Polecenie `npx tsx validation/run.ts` odtwarza cztery analizy
+offline z danych zapisanych 22.11.2026.
 
 **Raport dla jury** – [`docs/raport-jury.pdf`](docs/raport-jury.pdf): wydruk raportu aplikacji dla działki 142504_2.0018.127
 (Jastrzębia, grunt orny wg ESA WorldCover, pszenica ozima, 25 czerwca 2019) z prawdziwych danych: diagnoza z bilansu,

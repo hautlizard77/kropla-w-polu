@@ -9,6 +9,7 @@ import { cpSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { JURY_PARCELS } from '../../src/data/juryParcels';
 
 const work = mkdtempSync(join(tmpdir(), 'kropla-real-'));
 cpSync(join(import.meta.dirname, '..', '..', 'validation', 'cache'), work, { recursive: true });
@@ -46,8 +47,14 @@ test('dane rzeczywiste: rozbieżność bilansu i NDMI nie zmienia klasy; jest da
 
 test('tabela walidacji: zapas w mm i procent pełnego zapasu są spójne (bez mylenia jednostek)', async () => {
   const { readFileSync } = await import('node:fs');
-  const rows = JSON.parse(readFileSync(join(import.meta.dirname, '..', '..', 'validation', 'results.json'), 'utf8')) as { balance: string }[];
-  assert.ok(rows.length >= 3);
+  const rows = JSON.parse(readFileSync(join(import.meta.dirname, '..', '..', 'validation', 'results.json'), 'utf8')) as {
+    parcelId: string; date: string; balance: string;
+  }[];
+  assert.equal(new Set(JURY_PARCELS.map(({ voivodeship }) => voivodeship)).size, 4);
+  assert.deepEqual(
+    rows.map(({ parcelId, date }) => [parcelId, date]),
+    JURY_PARCELS.map(({ request }) => [request.parcelId, request.analysisDate]),
+  );
   for (const row of rows) {
     const m = /zapas (\d+) mm z (\d+) mm, (\d+)%/.exec(row.balance);
     assert.ok(m, `brak zapasu w mm i % w: ${row.balance}`);

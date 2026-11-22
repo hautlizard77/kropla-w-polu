@@ -1,76 +1,5 @@
 {
  "_opis": "Odpowiedzi GetFeatureInfo MPHP10 (wody.isok.gov.pl, warstwa 19) dla pierścieni 50/100/300 m wokół prostokąta działki; pobrane 2026-11-22. Kolumny: nazwa, charakter, typ, szerokość, identyfikator cieku.",
- "142504_2.0017.120": [
-  [
-   [
-    "Jastrzębianka",
-    "ciek naturalny - struga",
-    "stały",
-    "poniżej 1,5 m",
-    "25272"
-   ],
-   [
-    "Jastrzębianka",
-    "ciek naturalny - struga",
-    "stały",
-    "poniżej 1,5 m",
-    "25272"
-   ],
-   [
-    "Jastrzębianka",
-    "ciek naturalny - struga",
-    "stały",
-    "od 1,5 m do 5 m",
-    "25272"
-   ]
-  ],
-  [
-   [
-    "Jastrzębianka",
-    "ciek naturalny - struga",
-    "stały",
-    "poniżej 1,5 m",
-    "25272"
-   ],
-   [
-    "Jastrzębianka",
-    "ciek naturalny - struga",
-    "stały",
-    "poniżej 1,5 m",
-    "25272"
-   ],
-   [
-    "Jastrzębianka",
-    "ciek naturalny - struga",
-    "stały",
-    "od 1,5 m do 5 m",
-    "25272"
-   ]
-  ],
-  [
-   [
-    "Jastrzębianka",
-    "ciek naturalny - struga",
-    "stały",
-    "poniżej 1,5 m",
-    "25272"
-   ],
-   [
-    "Jastrzębianka",
-    "ciek naturalny - struga",
-    "stały",
-    "poniżej 1,5 m",
-    "25272"
-   ],
-   [
-    "Jastrzębianka",
-    "ciek naturalny - struga",
-    "stały",
-    "od 1,5 m do 5 m",
-    "25272"
-   ]
-  ]
- ],
  "142504_2.0018.127": [
   [
    [
@@ -114,115 +43,163 @@
    ]
   ]
  ],
- "142504_2.0018.65/1": [
+ "060408_2.0167.696/1": [
+  [],
   [
    [
-    "Jastrzębianka",
-    "ciek naturalny - struga",
-    "stały",
-    "poniżej 1,5 m",
-    "25272"
-   ]
-  ],
-  [
-   [
-    "Jastrzębianka",
-    "ciek naturalny - struga",
-    "stały",
-    "poniżej 1,5 m",
-    "25272"
-   ]
-  ],
-  [
-   [
-    "Jastrzębianka",
+    "Dopływ spod Gdeszyna",
     "ciek naturalny",
     "stały",
     "poniżej 1,5 m",
-    "25272"
+    "26714268"
    ],
    [
-    "Jastrzębianka",
+    "Henrykówka",
     "ciek naturalny - struga",
     "stały",
+    "od 1,5 m do 5 m",
+    "2671426"
+   ],
+   [
+    "Henrykówka",
+    "ciek naturalny - struga",
+    "stały",
+    "od 1,5 m do 5 m",
+    "2671426"
+   ],
+   [
+    "Huczwa",
+    "ciek naturalny - rzeka",
+    "stały",
+    "powyżej  5 m",
+    "267142"
+   ]
+  ],
+  [
+   [
+    "Dopływ spod Pułanek",
+    "ciek naturalny",
+    "stały",
     "poniżej 1,5 m",
-    "25272"
+    "26714258"
+   ],
+   [
+    "Dopływ spod Pułanek",
+    "ciek naturalny",
+    "stały",
+    "nieokreślona (tzn. -dla sztucznego połączenia z ciekiem głównym w obrębie zbiornika lub szerokiej rzeki lub dla osi geometrycznej cieku w obrębie zbiornika)",
+    "26714258"
+   ],
+   [
+    "Dopływ spod Pułanek",
+    "ciek naturalny",
+    "stały",
+    "poniżej 1,5 m",
+    "26714258"
+   ],
+   [
+    "Huczwa",
+    "ciek naturalny - rzeka",
+    "stały",
+    "powyżej  5 m",
+    "267142"
+   ],
+   [
+    "Dopływ spod Gdeszyna",
+    "ciek naturalny",
+    "stały",
+    "poniżej 1,5 m",
+    "26714268"
+   ],
+   [
+    "Henrykówka",
+    "ciek naturalny - struga",
+    "stały",
+    "od 1,5 m do 5 m",
+    "2671426"
+   ],
+   [
+    "Henrykówka",
+    "ciek naturalny - struga",
+    "stały",
+    "od 1,5 m do 5 m",
+    "2671426"
+   ],
+   [
+    "Huczwa",
+    "ciek naturalny - rzeka",
+    "stały",
+    "powyżej  5 m",
+    "267142"
+   ],
+   [
+    "Huczwa",
+    "ciek naturalny - rzeka",
+    "stały",
+    "powyżej  5 m",
+    "267142"
    ]
   ]
  ],
- "142508_2.0005.34": [
+ "220907_4.0007.1/1": [
   [],
+  [],
+  []
+ ],
+ "022305_2.0012.16": [
   [
    [
-    "Dopływ spod Adolfina",
-    "ciek naturalny",
-    "stały",
-    "poniżej 1,5 m",
-    "252812"
-   ],
-   [
-    "Leniwka",
-    "ciek naturalny - rzeka",
-    "stały",
-    "poniżej 1,5 m",
-    "2528"
-   ],
-   [
-    "Leniwka",
-    "ciek naturalny - rzeka",
+    "Sławka",
+    "ciek naturalny - potok",
     "stały",
     "od 1,5 m do 5 m",
-    "2528"
+    "133656"
    ]
   ],
   [
    [
-    "Leniwka",
-    "ciek naturalny - rzeka",
+    "Dopływ spod Wierzbic",
+    "ciek naturalny",
     "stały",
     "poniżej 1,5 m",
-    "2528"
+    "1336564"
+   ],
+   [
+    "Sławka",
+    "ciek naturalny - potok",
+    "stały",
+    "od 1,5 m do 5 m",
+    "133656"
+   ],
+   [
+    "Sławka",
+    "ciek naturalny - potok",
+    "stały",
+    "od 1,5 m do 5 m",
+    "133656"
    ]
-  ]
- ],
- "142508_2.0010.39/2": [
-  [],
-  [],
+  ],
   [
    [
-    "Dopływ spod Karpówki",
+    "Dopływ spod Wierzbic",
     "ciek naturalny",
     "stały",
     "poniżej 1,5 m",
-    "25282"
+    "1336564"
    ],
    [
-    "Dopływ spod Adolfina",
-    "ciek naturalny",
-    "stały",
-    "poniżej 1,5 m",
-    "252812"
-   ],
-   [
-    "Ostrownica",
-    "ciek naturalny - struga",
+    "Sławka",
+    "ciek naturalny - potok",
     "stały",
     "od 1,5 m do 5 m",
-    "25284"
+    "133656"
    ],
    [
-    "Leniwka",
-    "ciek naturalny - rzeka",
-    "stały",
-    "poniżej 1,5 m",
-    "2528"
-   ],
-   [
-    "Leniwka",
-    "ciek naturalny - rzeka",
+    "Sławka",
+    "ciek naturalny - potok",
     "stały",
     "od 1,5 m do 5 m",
-    "2528"
+    "133656"
    ]
   ]
  ]
